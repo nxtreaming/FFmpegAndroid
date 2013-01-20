@@ -78,25 +78,7 @@
 // 1000 ms = 1s
 #define MIN_SLEEP_TIME_MS 2
 
-#define MEASURE_TIME
-
-#ifdef MEASURE_TIME
-struct timespec render_frame_start, render_frame_stop;
-
-// http://www.guyrutenberg.com/2007/09/22/profiling-code-using-clock_gettime/
-struct timespec timespec_diff(struct timespec start, struct timespec end)
-{
-	struct timespec temp;
-	if ((end.tv_nsec-start.tv_nsec)<0) {
-		temp.tv_sec = end.tv_sec-start.tv_sec-1;
-		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
-	} else {
-		temp.tv_sec = end.tv_sec-start.tv_sec;
-		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
-	}
-	return temp;
-}
-#endif // MEASURE_TIME
+//#define MEASURE_TIME
 
 struct VideoRGBFrameElem {
 	AVFrame *frame;
@@ -297,6 +279,36 @@ enum PlayerErrors {
 	ERROR_COULD_NOT_ALLOCATE_MEMORY,
 };
 
+enum DecodeCheckMsg {
+	DECODE_CHECK_MSG_STOP = 0, DECODE_CHECK_MSG_FLUSH,
+};
+
+enum ReadFromStreamCheckMsg {
+	READ_FROM_STREAM_CHECK_MSG_STOP = 0, READ_FROM_STREAM_CHECK_MSG_SEEK,
+};
+
+enum RenderCheckMsg {
+	RENDER_CHECK_MSG_INTERRUPT = 0, RENDER_CHECK_MSG_FLUSH,
+};
+
+#ifdef MEASURE_TIME
+struct timespec render_frame_start, render_frame_stop;
+
+// http://www.guyrutenberg.com/2007/09/22/profiling-code-using-clock_gettime/
+struct timespec timespec_diff(struct timespec start, struct timespec end)
+{
+	struct timespec temp;
+	if ((end.tv_nsec-start.tv_nsec)<0) {
+		temp.tv_sec = end.tv_sec-start.tv_sec-1;
+		temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+	} else {
+		temp.tv_sec = end.tv_sec-start.tv_sec;
+		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+	}
+	return temp;
+}
+#endif // MEASURE_TIME
+
 void ffmpeg_log_callback(void* avcl, int level, const char* fmt, va_list vl) {
 	if (level > av_log_get_level())
 	        return;
@@ -338,10 +350,6 @@ void throw_interrupted_exception(JNIEnv *env, const char * msg) {
 void throw_runtime_exception(JNIEnv *env, const char * msg) {
 	throw_exception(env, runtime_exception_class_path_name, msg);
 }
-
-enum DecodeCheckMsg {
-	DECODE_CHECK_MSG_STOP = 0, DECODE_CHECK_MSG_FLUSH,
-};
 
 QueueCheckFuncRet player_decode_queue_check_func(Queue *queue,
 		struct DecoderData *decoderData, int *ret) {
@@ -426,6 +434,7 @@ int player_decode_audio(struct DecoderData * decoder_data, JNIEnv * env,
 	}
 	return 0;
 }
+
 void player_decode_video_flush(struct DecoderData * decoder_data, JNIEnv * env) {
 	struct Player *player = decoder_data->player;
 	if (!player->rendering) {
@@ -744,8 +753,9 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 	int destWidth = ctx->width;
 	int destHeight = ctx->height;
 	int err = 0;
+
 #ifdef MEASURE_TIME
-		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &timespec1);
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &timespec1);
 #endif // MEASURE_TIME
 
 	if ((ret = AndroidBitmap_lockPixels(env, elem->jbitmap, &buffer)) < 0) {
@@ -758,13 +768,13 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 			destWidth, destHeight);
 
 #ifdef MEASURE_TIME
-		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &timespec2);
-		diff = timespec_diff(timespec1, timespec2);
-		LOGI(7, "lockPixels and fillimage timediff: %d.%9ld",diff.tv_sec, diff.tv_nsec);
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &timespec2);
+	diff = timespec_diff(timespec1, timespec2);
+	LOGI(7, "lockPixels and fillimage timediff: %d.%9ld",diff.tv_sec, diff.tv_nsec);
 #endif // MEASURE_TIME
 
 #ifdef MEASURE_TIME
-		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &timespec1);
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &timespec1);
 #endif // MEASURE_TIME
 
 	LOGI(7, "player_decode_video copying...");
@@ -791,9 +801,9 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 				rgbFrame->data, rgbFrame->linesize);
 	}
 #ifdef MEASURE_TIME
-		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &timespec2);
-		diff = timespec_diff(timespec1, timespec2);
-		LOGI(7, "scale image timediff: %d.%9ld",diff.tv_sec, diff.tv_nsec);
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &timespec2);
+	diff = timespec_diff(timespec1, timespec2);
+	LOGI(7, "scale image timediff: %d.%9ld",diff.tv_sec, diff.tv_nsec);
 #endif // MEASURE_TIME
 
 #ifdef SUBTITLES
@@ -993,10 +1003,6 @@ end: free(decoder_data);
 	// TODO do something with err
 	return NULL;
 }
-
-enum ReadFromStreamCheckMsg {
-	READ_FROM_STREAM_CHECK_MSG_STOP = 0, READ_FROM_STREAM_CHECK_MSG_SEEK,
-};
 
 QueueCheckFuncRet player_read_from_stream_check_func(Queue *queue,
 		struct Player *player, int *ret) {
@@ -1701,6 +1707,7 @@ int player_alloc_queues(struct State *state) {
 	}
 	return 0;
 }
+
 void player_alloc_queues_free(struct State *state) {
 	struct Player *player = state->player;
 	int capture_streams_no = player->caputre_streams_no;
@@ -1967,12 +1974,14 @@ int player_start_decoding_threads_free(struct Player *player) {
 	}
 	return err;
 }
+
 void player_create_context_free(struct Player *player) {
 	if (player->input_format_ctx != NULL) {
 		LOGI(7, "player_set_data_source remove_context");
 		av_freep(&player->input_format_ctx);
 	}
 }
+
 int player_create_context(struct Player *player) {
 	player->input_format_ctx = avformat_alloc_context();
 	if (player->input_format_ctx == NULL) {
@@ -2601,10 +2610,6 @@ free_player:
 end:
 	return err;
 }
-
-enum RenderCheckMsg {
-	RENDER_CHECK_MSG_INTERRUPT = 0, RENDER_CHECK_MSG_FLUSH,
-};
 
 QueueCheckFuncRet player_render_frame_check_func(Queue *queue,
 		struct Player *player, int *check_ret_data) {
