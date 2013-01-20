@@ -135,18 +135,18 @@ struct Player {
 
 	jclass player_class;
 	jclass audio_track_class;
-	jmethodID audio_track_write_method;
-	jmethodID audio_track_play_method;
-	jmethodID audio_track_pause_method;
-	jmethodID audio_track_flush_method;
-	jmethodID audio_track_stop_method;
-	jmethodID audio_track_get_channel_count_method;
-	jmethodID audio_track_get_sample_rate_method;
+	jmethodID audio_track_write;
+	jmethodID audio_track_play;
+	jmethodID audio_track_pause;
+	jmethodID audio_track_flush;
+	jmethodID audio_track_stop;
+	jmethodID audio_track_get_channel_count;
+	jmethodID audio_track_get_sample_rate;
 
-	jmethodID player_prepare_frame_method;
-	jmethodID player_on_update_time_method;
-	jmethodID player_prepare_audio_track_method;
-	jmethodID player_set_stream_info_method;
+	jmethodID player_prepare_frame;
+	jmethodID player_on_update_time;
+	jmethodID player_prepare_audio_track;
+	jmethodID player_set_stream_info;
 
 	pthread_mutex_t mutex_operation;
 
@@ -361,7 +361,7 @@ QueueCheckFuncRet player_decode_queue_check_func(Queue *queue,
 void player_decode_audio_flush(struct DecoderData * decoder_data, JNIEnv * env) {
 	struct Player *player = decoder_data->player;
 	(*env)->CallVoidMethod(env, player->audio_track,
-			player->audio_track_flush_method);
+			player->audio_track_flush);
 }
 
 int player_decode_audio(struct DecoderData * decoder_data, JNIEnv * env,
@@ -1198,7 +1198,7 @@ seek_loop:
 		LOGI(3, "player_read_from_stream flushing audio")
 		// flush audio buffer
 		(*env)->CallVoidMethod(env, player->audio_track,
-				player->audio_track_flush_method);
+				player->audio_track_flush);
 		LOGI(3, "player_read_from_stream flushed audio");
 		pthread_cond_broadcast(&player->cond_queue);
 
@@ -1275,7 +1275,7 @@ int player_write_audio(struct DecoderData *decoder_data, JNIEnv *env,
 
 	LOGI(10, "player_write_audio playing audio track");
 	ret = (*env)->CallIntMethod(env, player->audio_track,
-			player->audio_track_write_method, samples_byte_array, 0, data_size);
+			player->audio_track_write, samples_byte_array, 0, data_size);
 	jthrowable exc = (*env)->ExceptionOccurred(env);
 	if (exc) {
 		err = -ERROR_PLAYING_AUDIO;
@@ -1373,7 +1373,7 @@ void *player_fill_video_rgb_frame(struct DecoderState *decoder_state) {
 	LOGI(3,
 			"player_fill_video_rgb_frame prepareFrame(%d, %d)", destWidth, destHeight);
 	jobject jbitmap = (*env)->CallObjectMethod(env, thiz,
-			player->player_prepare_frame_method, destWidth, destHeight);
+			player->player_prepare_frame, destWidth, destHeight);
 
 	jthrowable exc = (*env)->ExceptionOccurred(env);
 	if (exc) {
@@ -1415,7 +1415,7 @@ void player_update_current_time(struct State *state, int is_finished) {
 	jboolean jis_finished = is_finished ? JNI_TRUE : JNI_FALSE;
 
 	(*state->env)->CallVoidMethod(state->env, state->thiz,
-			player->player_on_update_time_method, player->last_updated_time,
+			player->player_on_update_time, player->last_updated_time,
 			player->video_duration, jis_finished);
 }
 
@@ -1546,8 +1546,8 @@ uint64_t player_find_layout_from_channels(int nb_channels) {
 
 void player_print_report_video_streams_free(JNIEnv* env, jobject thiz,
 		struct Player *player) {
-	if (player->player_set_stream_info_method != NULL)
-		(*env)->CallVoidMethod(env, thiz, player->player_set_stream_info_method,
+	if (player->player_set_stream_info != NULL)
+		(*env)->CallVoidMethod(env, thiz, player->player_set_stream_info,
 				NULL);
 }
 
@@ -1651,7 +1651,7 @@ int player_print_report_video_streams(JNIEnv* env, jobject thiz,
 	}
 
 	if (err == ERROR_NO_ERROR) {
-		(*env)->CallVoidMethod(env, thiz, player->player_set_stream_info_method,
+		(*env)->CallVoidMethod(env, thiz, player->player_set_stream_info,
 				array);
 	}
 
@@ -1817,7 +1817,7 @@ int player_create_audio_track(struct Player *player, struct State *state) {
 	int channels = ctx->channels;
 
 	jobject audio_track = (*state->env)->CallObjectMethod(state->env,
-			state->thiz, player->player_prepare_audio_track_method, sample_rate,
+			state->thiz, player->player_prepare_audio_track, sample_rate,
 			channels);
 
 	jthrowable exc = (*state->env)->ExceptionOccurred(state->env);
@@ -1835,9 +1835,9 @@ int player_create_audio_track(struct Player *player, struct State *state) {
 	}
 
 	player->audio_track_channel_count = (*state->env)->CallIntMethod(state->env,
-			player->audio_track, player->audio_track_get_channel_count_method);
+			player->audio_track, player->audio_track_get_channel_count);
 	int audio_track_sample_rate = (*state->env)->CallIntMethod(state->env,
-			player->audio_track, player->audio_track_get_sample_rate_method);
+			player->audio_track, player->audio_track_get_sample_rate);
 	player->audio_track_format = AV_SAMPLE_FMT_S16;
 
 	int64_t audio_track_layout = player_find_layout_from_channels(
@@ -2307,7 +2307,7 @@ void jni_player_pause(JNIEnv *env, jobject thiz) {
 	LOGI(3, "jni_player_pause Pausing");
 	player->pause = TRUE;
 	(*env)->CallVoidMethod(env, player->audio_track,
-			player->audio_track_pause_method);
+			player->audio_track_pause);
 	player->audio_pause_time = av_gettime();
 
 	// just leave exception
@@ -2336,7 +2336,7 @@ void jni_player_resume(JNIEnv *env, jobject thiz) {
 		goto do_nothing;
 	player->pause = FALSE;
 	(*env)->CallVoidMethod(env, player->audio_track,
-			player->audio_track_play_method);
+			player->audio_track_play);
 	// just leave exception
 
 	player->audio_resume_time = av_gettime();
@@ -2473,30 +2473,30 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 		(*env)->SetIntField(env, thiz, player_m_native_player_field,
 				(jint) player);
 
-		player->player_prepare_frame_method = java_get_method(env, player_class,
+		player->player_prepare_frame = java_get_method(env, player_class,
 				player_prepare_frame);
-		if (player->player_prepare_frame_method == NULL) {
+		if (player->player_prepare_frame == NULL) {
 			err = ERROR_NOT_FOUND_PREPARE_FRAME_METHOD;
 			goto free_player;
 		}
 
-		player->player_on_update_time_method = java_get_method(env,
+		player->player_on_update_time = java_get_method(env,
 				player_class, player_on_update_time);
-		if (player->player_on_update_time_method == NULL) {
+		if (player->player_on_update_time == NULL) {
 			err = ERROR_NOT_FOUND_ON_UPDATE_TIME_METHOD;
 			goto free_player;
 		}
 
-		player->player_prepare_audio_track_method = java_get_method(env,
+		player->player_prepare_audio_track = java_get_method(env,
 				player_class, player_prepare_audio_track);
-		if (player->player_prepare_audio_track_method == NULL) {
+		if (player->player_prepare_audio_track == NULL) {
 			err = ERROR_NOT_FOUND_PREPARE_AUDIO_TRACK_METHOD;
 			goto free_player;
 		}
 
-		player->player_set_stream_info_method = java_get_method(env,
+		player->player_set_stream_info = java_get_method(env,
 				player_class, player_set_stream_info);
-		if (player->player_set_stream_info_method == NULL) {
+		if (player->player_set_stream_info == NULL) {
 			err = ERROR_NOT_FOUND_SET_STREAM_INFO_METHOD;
 			goto free_player;
 		}
@@ -2522,51 +2522,51 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 		(*env)->DeleteLocalRef(env, audio_track_class);
 	}
 
-	player->audio_track_write_method = java_get_method(env,
+	player->audio_track_write = java_get_method(env,
 			player->audio_track_class, audio_track_write);
-	if (player->audio_track_write_method == NULL) {
+	if (player->audio_track_write == NULL) {
 		err = ERROR_NOT_FOUND_WRITE_METHOD;
 		goto delete_audio_track_global_ref;
 	}
 
-	player->audio_track_play_method = java_get_method(env,
+	player->audio_track_play = java_get_method(env,
 			player->audio_track_class, audio_track_play);
-	if (player->audio_track_play_method == NULL) {
+	if (player->audio_track_play == NULL) {
 		err = ERROR_NOT_FOUND_PLAY_METHOD;
 		goto delete_audio_track_global_ref;
 	}
 
-	player->audio_track_pause_method = java_get_method(env,
+	player->audio_track_pause = java_get_method(env,
 			player->audio_track_class, audio_track_pause);
-	if (player->audio_track_pause_method == NULL) {
+	if (player->audio_track_pause == NULL) {
 		err = ERROR_NOT_FOUND_PAUSE_METHOD;
 		goto delete_audio_track_global_ref;
 	}
 
-	player->audio_track_flush_method = java_get_method(env,
+	player->audio_track_flush = java_get_method(env,
 			player->audio_track_class, audio_track_flush);
-	if (player->audio_track_flush_method == NULL) {
+	if (player->audio_track_flush == NULL) {
 		err = ERROR_NOT_FOUND_FLUSH_METHOD;
 		goto delete_audio_track_global_ref;
 	}
 
-	player->audio_track_stop_method = java_get_method(env,
+	player->audio_track_stop = java_get_method(env,
 			player->audio_track_class, audio_track_stop);
-	if (player->audio_track_stop_method == NULL) {
+	if (player->audio_track_stop == NULL) {
 		err = ERROR_NOT_FOUND_STOP_METHOD;
 		goto delete_audio_track_global_ref;
 	}
 
-	player->audio_track_get_channel_count_method = java_get_method(env,
+	player->audio_track_get_channel_count = java_get_method(env,
 			player->audio_track_class, audio_track_get_channel_count);
-	if (player->audio_track_get_channel_count_method == NULL) {
+	if (player->audio_track_get_channel_count == NULL) {
 		err = ERROR_NOT_FOUND_GET_CHANNEL_COUNT_METHOD;
 		goto delete_audio_track_global_ref;
 	}
 
-	player->audio_track_get_sample_rate_method = java_get_method(env,
+	player->audio_track_get_sample_rate = java_get_method(env,
 			player->audio_track_class, audio_track_get_sample_rate);
-	if (player->audio_track_get_sample_rate_method == NULL) {
+	if (player->audio_track_get_sample_rate == NULL) {
 		err = ERROR_NOT_FOUND_GET_SAMPLE_RATE_METHOD;
 		goto delete_audio_track_global_ref;
 	}
