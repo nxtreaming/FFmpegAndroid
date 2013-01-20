@@ -64,7 +64,7 @@
 #define FALSE 0
 #define TRUE (!(FALSE))
 
-#define SUBTITLES
+//#define SUBTITLES
 
 #ifdef SUBTITLES
 #include "blend.h"
@@ -769,13 +769,13 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 
 	LOGI(7, "player_decode_video copying...");
 #ifdef YUV2RGB
-	if (ctx->pix_fmt == PIX_FMT_YUV420P) {
+	if (ctx->pix_fmt == AV_PIX_FMT_YUV420P) {
 		LOGI(9, "Using yuv420_2_rgb565");
 		yuv420_2_rgb565(rgbFrame->data[0], frame->data[0], frame->data[1],
 				frame->data[2], destWidth, destHeight, frame->linesize[0],
 				frame->linesize[1], destWidth << 1, yuv2rgb565_table,
 				player->dither++);
-	} else if (ctx->pix_fmt == PIX_FMT_NV12) {
+	} else if (ctx->pix_fmt == AV_PIX_FMT_NV12) {
 		LOGI(9, "Using nv12_2_rgb565");
 		nv12_2_rgb565(rgbFrame->data[0], frame->data[0], frame->data[1],
 						frame->data[1]+1, destWidth, destHeight, frame->linesize[0],
@@ -1220,9 +1220,9 @@ seek_loop:
 		pthread_cond_broadcast(&player->cond_queue);
 		LOGI(3, "player_read_from_stream ending seek");
 
-		skip_loop: av_free_packet(pkt);
+skip_loop:
+		av_free_packet(pkt);
 		pthread_mutex_unlock(&player->mutex_queue);
-
 end_loop:
 		continue;
 	}
@@ -1399,8 +1399,7 @@ release_ref:
 	elem->jbitmap = NULL;
 
 free_frame:
-	av_free(elem->frame);
-	elem->frame = NULL;
+	av_freep(&elem->frame);
 
 free_elem:
 	free(elem);
@@ -1504,9 +1503,7 @@ int player_try_open_stream(struct Player *player, enum AVMediaType codec_type,
 
 int player_find_stream(struct Player *player, enum AVMediaType codec_type,
 		int recommended_stream_no) {
-	//find video stream
 	int streams_no = player->caputre_streams_no;
-
 	int err = ERROR_NO_ERROR;
 	LOGI(3, "player_find_stream, type: %d", codec_type);
 
@@ -1524,8 +1521,6 @@ int player_find_stream(struct Player *player, enum AVMediaType codec_type,
 	if (bn_stream < 0) {
 		return -1;
 	}
-
-	LOGI(3, "player_set_data_source 4");
 
 	AVStream *stream = player->input_format_ctx->streams[bn_stream];
 	player->input_streams[streams_no] = stream;
@@ -1668,49 +1663,12 @@ free_map_class:
 	return err;
 }
 
-void player_print_video_informations(struct Player *player,
-		const char *file_path) {
-	if (LOG_LEVEL >= 3) {
-		int i;
-		av_dump_format(player->input_format_ctx, 0, file_path, FALSE);
-		LOGI(3,
-				"player_set_data_source Number of streams: %d", player->input_format_ctx->nb_streams);
-		for (i = 0; i < player->input_format_ctx->nb_streams; i++) {
-			AVStream *stream = player->input_format_ctx->streams[i];
-			AVCodecContext *codec = stream->codec;
-			LOGI(3, "- stream: %d", i);
-			AVDictionary *metadaat = stream->metadata;
-			AVDictionaryEntry *tag = NULL;
-			LOGI(3, "-- metadata:")
-			while ((tag = av_dict_get(metadaat, "", tag, AV_DICT_IGNORE_SUFFIX))
-					!= NULL) {
-				LOGI(3, "--- %s = %s", tag->key, tag->value);
-			}
-			LOGI(3, "-- codec_name: %s", codec->codec_name);
-			char *codec_type = "other";
-			if (codec->codec_type == AVMEDIA_TYPE_AUDIO) {
-				codec_type = "audio";
-			} else if (codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-				codec_type = "video";
-			} else if (codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
-				codec_type = "subtitle";
-			} else if (codec->codec_type == AVMEDIA_TYPE_ATTACHMENT) {
-				codec_type = "attachment";
-			} else if (codec->codec_type == AVMEDIA_TYPE_DATA) {
-				codec_type = "data";
-			}
-			LOGI(3, "-- codec_type: %s", codec_type);
-		}
-	}
-}
-
 int player_alloc_frames_free(struct Player *player) {
 	int capture_streams_no = player->caputre_streams_no;
 	int stream_no;
 	for (stream_no = 0; stream_no < capture_streams_no; ++stream_no) {
 		if (player->input_frames[stream_no] != NULL) {
-			av_free(player->input_frames[stream_no]);
-			player->input_frames[stream_no] = NULL;
+			av_freep(&player->input_frames[stream_no]);
 		}
 	}
 	return 0;
@@ -1858,7 +1816,6 @@ int player_create_audio_track(struct Player *player, struct State *state) {
 	int sample_rate = ctx->sample_rate;
 	int channels = ctx->channels;
 
-	LOGI(3, "player_set_data_source 14");
 	jobject audio_track = (*state->env)->CallObjectMethod(state->env,
 			state->thiz, player->player_prepare_audio_track_method, sample_rate,
 			channels);
@@ -1871,7 +1828,6 @@ int player_create_audio_track(struct Player *player, struct State *state) {
 		return -ERROR_NOT_CREATED_AUDIO_TRACK;
 	}
 
-	LOGI(3, "player_set_data_source 15");
 	player->audio_track = (*state->env)->NewGlobalRef(state->env, audio_track);
 	(*state->env)->DeleteLocalRef(state->env, audio_track);
 	if (player->audio_track == NULL) {
@@ -2014,8 +1970,7 @@ int player_start_decoding_threads_free(struct Player *player) {
 void player_create_context_free(struct Player *player) {
 	if (player->input_format_ctx != NULL) {
 		LOGI(7, "player_set_data_source remove_context");
-		av_free(player->input_format_ctx);
-		player->input_format_ctx = NULL;
+		av_freep(&player->input_format_ctx);
 	}
 }
 int player_create_context(struct Player *player) {
@@ -2055,13 +2010,7 @@ int player_open_input(struct Player *player, const char *file_path,
 	return ERROR_NO_ERROR;
 }
 
-void player_find_stream_info_free(struct Player *player) {
-	// nothigng to do
-}
-
 int player_find_stream_info(struct Player *player) {
-	LOGI(3, "player_set_data_source 2");
-	// find video informations
 	if (avformat_find_stream_info(player->input_format_ctx, NULL) < 0) {
 		LOGE(1, "Could not open stream\n");
 		return -ERROR_COULD_NOT_OPEN_STREAM;
@@ -2165,14 +2114,11 @@ void player_stop_without_lock(struct State * state) {
 #endif // SUBTITLES
 	player_print_report_video_streams_free(state->env, state->thiz, player);
 	player_find_streams_free(player);
-	player_find_stream_info_free(player);
 	player_open_input_free(player);
 	player_create_context_free(player);
 }
 
 void player_stop(struct State * state) {
-	int ret;
-
 	pthread_mutex_lock(&state->player->mutex_operation);
 	player_stop_without_lock(state);
 	pthread_mutex_unlock(&state->player->mutex_operation);
@@ -2209,7 +2155,7 @@ int player_set_data_source(struct State *state, const char *file_path,
 #endif // SUBTITLES
 
 	// initial setup
-	player->out_format = PIX_FMT_RGB565;
+	player->out_format = AV_PIX_FMT_RGB565;
 	player->pause = TRUE;
 	player->audio_pause_time = player->audio_resume_time = av_gettime();
 
@@ -2222,8 +2168,6 @@ int player_set_data_source(struct State *state, const char *file_path,
 
 	if ((err = player_find_stream_info(player)) < 0)
 		goto error;
-
-	player_print_video_informations(player, file_path);
 
 	if ((err = player_print_report_video_streams(state->env, state->thiz,
 			player)) < 0)
@@ -2258,9 +2202,7 @@ int player_set_data_source(struct State *state, const char *file_path,
 	if ((err = player_alloc_queues(state)) < 0)
 		goto error;
 
-	struct DecoderState video_decoder_state = { stream_no
-			: player->video_stream_no, player: player, env:state->env, thiz
-			: state->thiz };
+	struct DecoderState video_decoder_state = { player->video_stream_no, player, state->env, state->thiz };
 	if ((err = player_prepare_rgb_frames(&video_decoder_state, state)) < 0)
 		goto error;
 #ifdef SUBTITLES
@@ -2310,7 +2252,6 @@ error:
 #endif // SUBTITLES
 	player_print_report_video_streams_free(state->env, state->thiz, player);
 	player_find_streams_free(player);
-	player_find_stream_info_free(player);
 	player_open_input_free(player);
 	player_create_context_free(player);
 #ifdef SUBTITLES
