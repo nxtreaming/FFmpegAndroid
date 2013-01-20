@@ -39,7 +39,6 @@
 #include <jni.h>
 #include <pthread.h>
 
-/* Android profiler */
 #ifdef PROFILER
 #include <android-ndk-profiler-3.1/prof.h>
 #endif
@@ -49,7 +48,6 @@
 #endif
 
 /*local headers*/
-
 #include "helpers.h"
 #include "queue.h"
 #include "player.h"
@@ -72,11 +70,12 @@
 #include "blend.h"
 #include <ass/ass.h>
 #endif // SUBTITLES
+
 #define DO_NOT_SEEK -1
 
-// 1000000 us = 1 s
+// 1000000 us = 1s
 #define MIN_SLEEP_TIME_US 10000
-// 10000 ms = 1s
+// 1000 ms = 1s
 #define MIN_SLEEP_TIME_MS 2
 
 #define MEASURE_TIME
@@ -128,7 +127,6 @@ void player_print_codec_description(AVCodec *codec) {
 }
 
 struct VideoRGBFrameElem {
-
 	AVFrame *frame;
 	jobject jbitmap;
 	double time;
@@ -189,6 +187,7 @@ struct Player {
 	ASS_Library * ass_library;
 	ASS_Renderer * ass_renderer;
 	ASS_Track * ass_track;
+	pthread_mutex_t mutex_ass;
 #endif // SUBTITLES
 	AVStream *input_streams[MAX_STREAMS];
 	AVCodecContext * input_codec_ctxs[MAX_STREAMS];
@@ -245,10 +244,6 @@ struct Player {
 #ifdef YUV2RGB
 	int dither;
 #endif
-
-#ifdef SUBTITLES
-	pthread_mutex_t mutex_ass;
-#endif // SUBTITLES
 };
 
 struct State {
@@ -330,15 +325,6 @@ enum PlayerErrors {
 	ERROR_COULD_NOT_ALLOCATE_MEMORY,
 };
 
-#define AV_LOG_QUIET    -8
-#define AV_LOG_PANIC     0
-#define AV_LOG_FATAL     8
-#define AV_LOG_ERROR    16
-#define AV_LOG_WARNING  24
-#define AV_LOG_INFO     32
-#define AV_LOG_VERBOSE  40
-#define AV_LOG_DEBUG    48
-
 void ffmpeg_log_callback(void* avcl, int level, const char* fmt, va_list vl) {
 	if (level > av_log_get_level())
 	        return;
@@ -360,7 +346,7 @@ void ffmpeg_log_callback(void* avcl, int level, const char* fmt, va_list vl) {
 	} else if (level > AV_LOG_QUIET) {
 		andriod_level = ANDROID_LOG_SILENT;
 	}
-	__android_log_vprint(andriod_level, "ffmpeg", fmt, vl);
+	__android_log_vprint(andriod_level, "FFmpeg", fmt, vl);
 }
 
 void throw_exception(JNIEnv *env, const char * exception_class_path_name,
@@ -576,18 +562,6 @@ static void ass_msg_callback(int level, const char *fmt, va_list va, void *data)
 	__android_log_vprint(ANDROID_LOG_INFO, "libass", fmt, va);
 }
 
-//#define MAX_PRINT_LEN 1024
-//static char print_buff[MAX_PRINT_LEN*2+1];
-
-//static void player_log_hex(char *log, char *data, int len) {
-//	int i;
-//	if (len > MAX_PRINT_LEN)
-//		exit(1);
-//	for (i = 0; i < len; ++i)
-//		sprintf(&print_buff[i*2], "%02X", (unsigned char)data[i]);
-//	LOGI(10, log, print_buff);
-//}
-
 int player_decode_subtitles(struct DecoderData * decoder_data, JNIEnv * env,
 		struct PacketData *packet_data) {
 	struct Player *player = decoder_data->player;
@@ -600,21 +574,6 @@ int player_decode_subtitles(struct DecoderData * decoder_data, JNIEnv * env,
 
 	struct AVSubtitle sub;
 	int got_sub_ptr;
-
-//	memset(&sub, 0, sizeof(AVSubtitle));
-//	sub.pts = AV_NOPTS_VALUE;
-//	got_sub_ptr = 0;
-//
-//	LOGI(3, "player_decode_subtitles: decoded subtitle");
-//
-//	got_sub_ptr = packet->size > 0;
-//
-//	player_log_hex("player_decode_subtitles: data: %s", packet->data, packet->size);
-//
-//	if (got_sub_ptr) {
-//		ass_process_data(player->ass_track, packet->data, packet->size);
-//	        ctx->frame_number++;
-//	}
 
 	int ret = avcodec_decode_subtitle2(ctx, &sub, &got_sub_ptr, packet);
 	if (ret < 0) {
@@ -643,7 +602,6 @@ int player_decode_subtitles(struct DecoderData * decoder_data, JNIEnv * env,
 		pts = av_q2d(stream->time_base) * packet->pts;
 
 	player_print_subtitle(&sub, pts);
-//	fix_rect_from_rgba_to_yuva(sub.num_rects, sub.rects);
 
 	pthread_mutex_lock(&player->mutex_queue);
 	struct SubtitleElem *elem = queue_push_start_already_locked(
@@ -793,12 +751,6 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 				LOGI(5, "player_decode_video no more subtitles found");
 				break;
 			}
-//			int sub;
-//			for (sub = 0; sub < subtitle->subtitle.num_rects; ++sub) {
-//				AVSubtitleRect *rect = subtitle->subtitle.rects[sub];
-//				LOGI(3, "player_decode_video_subtitles: ass: %s", rect->ass);
-//				ass_process_data(player->ass_track, rect->ass, strlen(rect->ass));
-//			}
 			if (subtitle->stop_time >= time)
 				break;
 			avsubtitle_free(&subtitle->subtitle);
@@ -1231,7 +1183,7 @@ void * player_read_from_stream(void *data) {
 
 		goto end_loop;
 
-		exit_loop:
+exit_loop:
 		LOGI(3, "player_read_from_stream stop");
 		av_free_packet(pkt);
 
@@ -1316,7 +1268,6 @@ detach_current_thread:
 			player->get_javavm);
 	if (ret && !err)
 		err = ERROR_COULD_NOT_DETACH_THREAD;
-
 end:
 	// TODO do something with error valuse
 	return NULL;
@@ -1378,7 +1329,6 @@ int player_write_audio(struct DecoderData *decoder_data, JNIEnv *env,
 free_local_ref:
 	LOGI(10, "player_write_audio releasing local ref");
 	(*env)->DeleteLocalRef(env, samples_byte_array);
-
 end:
 	return err;
 }
@@ -1493,8 +1443,8 @@ free_elem:
 	elem = NULL;
 
 error:
-	end: return elem;
-
+end:
+	return elem;
 }
 
 void player_update_current_time(struct State *state, int is_finished) {
@@ -1599,7 +1549,6 @@ int player_find_stream(struct Player *player, enum AVMediaType codec_type,
 
 	int bn_stream = player_try_open_stream(player, codec_type,
 			recommended_stream_no);
-
 	if (bn_stream < 0) {
 		int i;
 		for (i = 0; i < player->input_format_ctx->nb_streams; i++) {
@@ -1941,7 +1890,7 @@ void player_create_audio_track_free(struct Player *player, struct State *state) 
 }
 
 int player_create_audio_track(struct Player *player, struct State *state) {
-	//creating audiotrack
+	//creating audio track
 	AVCodecContext * ctx = player->input_codec_ctxs[player->audio_stream_no];
 	int sample_rate = ctx->sample_rate;
 	int channels = ctx->channels;
@@ -2066,7 +2015,8 @@ int player_start_decoding_threads(struct Player *player) {
 	}
 	player->thread_player_read_from_stream_created = TRUE;
 
-	end: ret = pthread_attr_destroy(&attr);
+end:
+	ret = pthread_attr_destroy(&attr);
 	if (ret) {
 		if (!err) {
 			err = ERROR_COULD_NOT_DESTROY_PTHREAD_ATTR;
@@ -2176,7 +2126,6 @@ void player_play_prepare(struct Player *player) {
 }
 
 #ifdef SUBTITLES
-
 void player_prepare_ass_decoder_free(struct Player *player) {
 	if (player->ass_track != NULL) {
 		ass_free_track(player->ass_track);
@@ -2207,7 +2156,6 @@ int player_prepare_ass_decoder(struct Player* player, const char *font_path) {
 	player->ass_track = ass_new_track(player->ass_library);
 	if (player->ass_track == NULL)
 		return -ERROR_COULD_NOT_PREAPARE_ASS_TRACK;
-
 
 	LOGI(3, "player_prepare_ass_decoder #4");
 
@@ -2464,7 +2412,6 @@ void jni_player_pause(JNIEnv *env, jobject thiz) {
 
 do_nothing:
 	pthread_mutex_unlock(&player->mutex_queue);
-
 end:
 	pthread_mutex_unlock(&player->mutex_operation);
 }
@@ -2500,7 +2447,6 @@ void jni_player_resume(JNIEnv *env, jobject thiz) {
 
 do_nothing:
 	pthread_mutex_unlock(&player->mutex_queue);
-
 end:
 	pthread_mutex_unlock(&player->mutex_operation);
 }
@@ -2557,7 +2503,6 @@ void jni_player_read_dictionary(JNIEnv *env, AVDictionary **dictionary,
 int jni_player_set_data_source(JNIEnv *env, jobject thiz, jstring string,
 		jobject dictionary, int video_stream_no, int audio_stream_no,
 		int subtitle_stream_no) {
-
 	AVDictionary *dict = NULL;
 	if (dictionary != NULL) {
 		jni_player_read_dictionary(env, &dict, dictionary);
@@ -2583,7 +2528,6 @@ void jni_player_dealloc(JNIEnv *env, jobject thiz) {
 }
 
 int jni_player_init(JNIEnv *env, jobject thiz) {
-
 #ifdef PROFILER
 #warning "Profiler enabled"
 	setenv("CPUPROFILE_FREQUENCY", "1000", 1);
@@ -2750,8 +2694,8 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 
 delete_audio_track_global_ref:
 	(*env)->DeleteGlobalRef(env, player->audio_track_class);
-	free_player: free(player);
-
+free_player:
+	free(player);
 end:
 	return err;
 }
