@@ -98,34 +98,6 @@ struct timespec timespec_diff(struct timespec start, struct timespec end)
 }
 #endif // MEASURE_TIME
 
-void player_print_codec_description(AVCodec *codec) {
-	char *type = "???";
-	switch (codec->type) {
-	case AVMEDIA_TYPE_ATTACHMENT:
-		type = "attachment";
-		break;
-	case AVMEDIA_TYPE_AUDIO:
-		type = "audio";
-		break;
-	case AVMEDIA_TYPE_DATA:
-		type = "data";
-		break;
-	case AVMEDIA_TYPE_SUBTITLE:
-		type = "subtitle";
-		break;
-	case AVMEDIA_TYPE_UNKNOWN:
-		type = "unknown";
-		break;
-	case AVMEDIA_TYPE_VIDEO:
-		type = "video";
-		break;
-	default:
-		break;
-	}
-	LOGI(10,
-			"player_print_codec_description id: %d codec: %s, type: %s", codec->id, codec->name, type);
-}
-
 struct VideoRGBFrameElem {
 	AVFrame *frame;
 	jobject jbitmap;
@@ -365,14 +337,6 @@ void throw_interrupted_exception(JNIEnv *env, const char * msg) {
 
 void throw_runtime_exception(JNIEnv *env, const char * msg) {
 	throw_exception(env, runtime_exception_class_path_name, msg);
-}
-
-void player_print_all_codecs() {
-	AVCodec *p = NULL;
-	LOGI(10, "player_print_all_codecs available codecs:");
-	while ((p = av_codec_next(p)) != NULL) {
-		player_print_codec_description(p);
-	}
 }
 
 enum DecodeCheckMsg {
@@ -1496,7 +1460,6 @@ int player_open_stream(struct Player *player, AVCodecContext * ctx,
 
 	if (avcodec_open2(ctx, *codec, NULL) < 0) {
 		LOGE(1, "Could not open codec");
-		player_print_codec_description(*codec);
 		*codec = NULL;
 		return -ERROR_COULD_NOT_OPEN_VIDEO_CODEC;
 	}
@@ -2687,8 +2650,6 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 #ifdef MODULE_ENCRYPT
 	register_aes_protocol();
 #endif
-
-	player_print_all_codecs();
 
 	goto end;
 
