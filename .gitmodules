@@ -22,3 +22,6 @@
 [submodule "FFmpegLibrary/jni/ffmpeg"]
 	path = FFmpegLibrary/jni/ffmpeg
 	url = git://source.ffmpeg.org/ffmpeg.git
+[submodule "FFmpegLibrary/jni/rtmpdump"]
+	path = FFmpegLibrary/jni/rtmpdump
+	url = git://git.ffmpeg.org/rtmpdump
