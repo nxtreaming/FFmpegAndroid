@@ -191,9 +191,6 @@ function build_ass
 }
 function build_fribidi
 {
-	# generate the needed files on host
-	./configure && make && make distclean
-
 	PLATFORM=$NDK/platforms/$PLATFORM_VERSION/arch-$ARCH
 	export PATH=${PATH}:$PREBUILT/bin/
 	CROSS_COMPILE=$PREBUILT/bin/$EABIARCH-
@@ -211,6 +208,10 @@ function build_fribidi
 	export LDFLAGS="-Wl,-rpath-link=$PLATFORM/usr/lib -L$PLATFORM/usr/lib -nostdlib -lc -lm -ldl -llog"
 
 	cd fribidi
+
+	# generate the needed files on host
+	./configure && make && make distclean
+
 	./configure \
 	    --prefix=$(pwd)/$PREFIX \
 	    --host=$ARCH-linux \
