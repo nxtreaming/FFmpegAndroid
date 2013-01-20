@@ -191,6 +191,9 @@ function build_ass
 }
 function build_fribidi
 {
+	# generate the needed files on host
+	./configure && make && make distclean
+
 	PLATFORM=$NDK/platforms/$PLATFORM_VERSION/arch-$ARCH
 	export PATH=${PATH}:$PREBUILT/bin/
 	CROSS_COMPILE=$PREBUILT/bin/$EABIARCH-
