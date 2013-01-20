@@ -205,17 +205,13 @@ function build_fribidi
 	export STRIP="${CROSS_COMPILE}strip"
 	export RANLIB="${CROSS_COMPILE}ranlib"
 	export AR="${CROSS_COMPILE}ar"
-	export LDFLAGS="-Wl,-rpath-link=$PLATFORM/usr/lib -L$PLATFORM/usr/lib -nostdlib -lc -lm -ldl -llog"
+	export LDFLAGS="-Wl,-rpath-link=$PLATFORM/usr/lib -L$PLATFORM/usr/lib -nostdlib -lc -lm -ldl -llog -lgcc "
 
 	cd fribidi
-
-	# generate the needed files on host
-	./configure && make && make distclean
 
 	./configure \
 	    --prefix=$(pwd)/$PREFIX \
 	    --host=$ARCH-linux \
-	    --disable-bin \
 	    --disable-dependency-tracking \
 	    --disable-shared \
 	    --enable-static \
