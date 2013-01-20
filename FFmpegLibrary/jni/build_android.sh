@@ -277,7 +277,6 @@ EOF
 	    --enable-demuxer=rtp \
 	    --enable-demuxer=hls \
 	    --enable-protocol=crypto \
-	    --enable-protocol=jni \
 	    --enable-protocol=file \
 	    --enable-protocol=rtp \
 	    --enable-protocol=tcp \
