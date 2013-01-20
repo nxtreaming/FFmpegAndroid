@@ -25,3 +25,6 @@
 [submodule "FFmpegLibrary/jni/rtmpdump"]
 	path = FFmpegLibrary/jni/rtmpdump
 	url = git://git.ffmpeg.org/rtmpdump
+[submodule "FFmpegLibrary/jni/fdk-aac"]
+	path = FFmpegLibrary/jni/fdk-aac
+	url = git://github.com/mstorsjo/fdk-aac.git
