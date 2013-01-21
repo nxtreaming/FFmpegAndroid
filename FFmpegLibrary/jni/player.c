@@ -1106,7 +1106,8 @@ void * player_read_from_stream(void *data) {
 		int stream_no;
 		int caputre_streams_no = player->caputre_streams_no;
 
-		parse_frame: queue = NULL;
+parse_frame:
+		queue = NULL;
 		LOGI(3, "player_read_from_stream looking for stream")
 		for (stream_no = 0; stream_no < caputre_streams_no; ++stream_no) {
 			if (packet.stream_index
@@ -1121,7 +1122,7 @@ void * player_read_from_stream(void *data) {
 			goto skip_loop;
 		}
 
-		push_start:
+push_start:
 		LOGI(10, "player_read_from_stream waiting for queue");
 		packet_data = queue_push_start_already_locked(queue,
 				&player->mutex_queue, &player->cond_queue, &to_write,
@@ -1645,7 +1646,8 @@ int player_print_report_video_streams(JNIEnv* env, jobject thiz,
 				(*env)->DeleteLocalRef(env, previous);
 			}
 			(*env)->DeleteLocalRef(env, value);
-			while_free_key: (*env)->DeleteLocalRef(env, key);
+while_free_key:
+			(*env)->DeleteLocalRef(env, key);
 		}
 
 		(*env)->CallVoidMethod(env, stream_info,
@@ -1653,7 +1655,8 @@ int player_print_report_video_streams(JNIEnv* env, jobject thiz,
 		(*env)->DeleteLocalRef(env, map);
 
 		(*env)->SetObjectArrayElement(env, array, i, stream_info);
-		loop_free_stream_info: (*env)->DeleteLocalRef(env, stream_info);
+loop_free_stream_info:
+		(*env)->DeleteLocalRef(env, stream_info);
 	}
 
 	if (err == ERROR_NO_ERROR) {
@@ -1923,7 +1926,7 @@ int player_start_decoding_threads(struct Player *player) {
 	}
 	for (i = 0; i < player->caputre_streams_no; ++i) {
 		struct DecoderData * decoder_data = malloc(sizeof(decoder_data));
-		*decoder_data = (struct DecoderData) {player: player, stream_no: i};
+		*decoder_data = (struct DecoderData) {player, i};
 		ret = pthread_create(&player->decode_threads[i], &attr, player_decode,
 				decoder_data);
 		if (ret) {
@@ -2216,9 +2219,7 @@ int player_set_data_source(struct State *state, const char *file_path,
 		goto error;
 #ifdef SUBTITLES
 	if (player->subtitle_stream_no >= 0) {
-		struct DecoderState subtitle_decoder_state = { stream_no
-				: player->subtitle_stream_no, player: player, env:state->env,
-				thiz: state->thiz };
+		struct DecoderState subtitle_decoder_state = { player->subtitle_stream_no, player, state->env, state->thiz };
 		if ((err = player_prepare_subtitles_queue(&subtitle_decoder_state, state)) < 0)
 			goto error;
 	}
@@ -2424,7 +2425,7 @@ int jni_player_set_data_source(JNIEnv *env, jobject thiz, jstring string,
 
 	const char *file_path = (*env)->GetStringUTFChars(env, string, NULL);
 	struct Player * player = player_get_player_field(env, thiz);
-	struct State state = { player: player, env: env, thiz: thiz };
+	struct State state = { player, env, thiz };
 
 	int ret = player_set_data_source(&state, file_path, dict, video_stream_no,
 			audio_stream_no, subtitle_stream_no);
@@ -2660,7 +2661,7 @@ void jni_player_render_frame_stop(JNIEnv *env, jobject thiz) {
 
 jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 	struct Player * player = player_get_player_field(env, thiz);
-	struct State state = { env: env, player: player, thiz: thiz };
+	struct State state = { env, player, thiz };
 	int interrupt_ret;
 	struct VideoRGBFrameElem *elem;
 #ifdef MEASURE_TIME
@@ -2701,7 +2702,8 @@ pop:
 				goto pop;
 			}
 			QueueCheckFuncRet ret;
-			test: ret = player_render_frame_check_func(player->rgb_video_frames,
+test:
+			ret = player_render_frame_check_func(player->rgb_video_frames,
 					player, &interrupt_ret);
 			switch (ret) {
 			case QUEUE_CHECK_FUNC_RET_WAIT:
