@@ -10,4 +10,12 @@ FFmpegLibrary/.settings/**
 FFmpegLibrary/jni/.settings/**
 FFmpegLibrary/lint.xml
 
+.cproject
+.classpath
+.project
+*.tmp
+*.bak
+*.swp
+*.launch
+**/.DS_Store
 *.DS_Store
