@@ -1452,21 +1452,19 @@ void player_open_stream_free(struct Player *player, int stream_no) {
 	}
 }
 
-int player_open_stream(struct Player *player, AVCodecContext * ctx,
-		AVCodec **codec) {
+int player_open_stream(struct Player *player, AVCodecContext * ctx) {
 	enum AVCodecID codec_id = ctx->codec_id;
 	LOGI(3, "player_open_stream trying open: %d", codec_id);
 
-	*codec = avcodec_find_decoder(codec_id);
-	if (*codec == NULL) {
+	AVCodec *codec = avcodec_find_decoder(codec_id);
+	if (codec == NULL) {
 		LOGE(1,
 				"player_set_data_source Could not find codec for id: %d", codec_id);
 		return -ERROR_COULD_NOT_FIND_VIDEO_CODEC;
 	}
 
-	if (avcodec_open2(ctx, *codec, NULL) < 0) {
+	if (avcodec_open2(ctx, codec, NULL) < 0) {
 		LOGE(1, "Could not open codec");
-		*codec = NULL;
 		return -ERROR_COULD_NOT_OPEN_VIDEO_CODEC;
 	}
 
@@ -1500,8 +1498,7 @@ int player_try_open_stream(struct Player *player, enum AVMediaType codec_type,
 	if (ctx->codec_type != codec_type) {
 		return -1;
 	}
-	AVCodec * codec = ctx->codec;
-	int err = player_open_stream(player, ctx, &codec);
+	int err = player_open_stream(player, ctx);
 	if (err < 0) {
 		return -1;
 	}
@@ -2661,7 +2658,7 @@ void jni_player_render_frame_stop(JNIEnv *env, jobject thiz) {
 
 jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 	struct Player * player = player_get_player_field(env, thiz);
-	struct State state = { env, player, thiz };
+	struct State state = { player, env, thiz };
 	int interrupt_ret;
 	struct VideoRGBFrameElem *elem;
 #ifdef MEASURE_TIME
