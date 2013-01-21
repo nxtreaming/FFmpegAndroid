@@ -1,1 +1,13 @@
+FFmpegLibrary/jni/ffmpeg-build/**
+FFmpegLibrary/bin/**
+FFmpegLibrary/local.properties
+FFmpegLibrary/gen/**
+FFmpegLibrary/tmp/**
+FFmpegLibrary/obj/**
+FFmpegLibrary/libs/**
+FFmpegLibrary/proguard/**
+FFmpegLibrary/.settings/**
+FFmpegLibrary/jni/.settings/**
+FFmpegLibrary/lint.xml
+
 *.DS_Store
