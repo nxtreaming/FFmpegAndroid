@@ -267,22 +267,12 @@ EOF
 	    --enable-avresample \
 	    --disable-parsers \
 	    --disable-protocols \
-	    --enable-libass \
 	    --enable-demuxer=mov \
-	    --enable-demuxer=rtsp \
-	    --enable-demuxer=rtp \
 	    --enable-demuxer=hls \
 	    --enable-protocol=file \
-	    --enable-protocol=rtp \
 	    --enable-protocol=tcp \
-	    --enable-protocol=udp \
 	    --enable-protocol=hls \
 	    --enable-protocol=http \
-	    --enable-decoder=xsub \
-	    --enable-decoder=jacosub \
-	    --enable-decoder=dvdsub \
-	    --enable-decoder=dvbsub \
-	    --enable-decoder=subviewer \
 	    --enable-decoder=h264 \
 	    --enable-decoder=aac \
 	    --enable-parser=h264 \
@@ -305,7 +295,7 @@ EOF
 function build_one {
 	cd ffmpeg
 	PLATFORM=$NDK/platforms/$PLATFORM_VERSION/arch-$ARCH
-	$PREBUILT/bin/$EABIARCH-ld -rpath-link=$PLATFORM/usr/lib -L$PLATFORM/usr/lib -L$PREFIX/lib  -soname $SONAME -shared -nostdlib  -z noexecstack -Bsymbolic --whole-archive --no-undefined -o $OUT_LIBRARY -lavcodec -lavformat -lavresample -lavutil -lswresample -lass -lfreetype -lfribidi -lswscale -lc -lm -lz -ldl -llog --dynamic-linker=/system/bin/linker -zmuldefs $PREBUILT/lib/gcc/$EABIARCH/4.6/libgcc.a || exit 1
+	$PREBUILT/bin/$EABIARCH-ld -rpath-link=$PLATFORM/usr/lib -L$PLATFORM/usr/lib -L$PREFIX/lib  -soname $SONAME -shared -nostdlib  -z noexecstack -Bsymbolic --whole-archive --no-undefined -o $OUT_LIBRARY -lavcodec -lavformat -lavresample -lavutil -lswresample -lswscale -lc -lm -lz -ldl -llog --dynamic-linker=/system/bin/linker -zmuldefs $PREBUILT/lib/gcc/$EABIARCH/4.6/libgcc.a || exit 1
 	cd ..
 }
 
@@ -320,11 +310,6 @@ ADDITIONAL_CONFIGURE_FLAG=
 SONAME=libffmpeg.so
 PREBUILT=$NDK/toolchains/arm-linux-androideabi-4.6/prebuilt/$OS-x86
 PLATFORM_VERSION=android-5
-#build_amr
-#build_aac
-#build_fribidi
-#build_freetype2
-#build_ass
 #build_ffmpeg
 #build_one
 
@@ -338,11 +323,6 @@ PLATFORM_VERSION=android-5
 #SONAME=libffmpeg.so
 #PREBUILT=$NDK/toolchains/x86-4.6/prebuilt/$OS-x86
 #PLATFORM_VERSION=android-9
-#build_amr
-#build_aac
-#build_fribidi
-#build_freetype2
-#build_ass
 #build_ffmpeg
 #build_one
 
@@ -356,11 +336,6 @@ PLATFORM_VERSION=android-5
 #SONAME=libffmpeg.so
 #PREBUILT=$NDK/toolchains/mipsel-linux-android-4.6/prebuilt/$OS-x86
 #PLATFORM_VERSION=android-9
-#build_amr
-#build_aac
-#build_fribidi
-#build_freetype2
-#build_ass
 #build_ffmpeg
 #build_one
 
@@ -375,11 +350,6 @@ ADDITIONAL_CONFIGURE_FLAG=
 SONAME=libffmpeg.so
 PREBUILT=$NDK/toolchains/arm-linux-androideabi-4.6/prebuilt/$OS-x86
 PLATFORM_VERSION=android-5
-#build_amr
-#build_aac
-build_fribidi
-build_freetype2
-build_ass
 build_ffmpeg
 build_one
 
@@ -394,10 +364,5 @@ ADDITIONAL_CONFIGURE_FLAG=--enable-neon
 SONAME=libffmpeg-neon.so
 PREBUILT=$NDK/toolchains/arm-linux-androideabi-4.6/prebuilt/$OS-x86
 PLATFORM_VERSION=android-9
-#build_amr
-#build_aac
-build_fribidi
-build_freetype2
-build_ass
 build_ffmpeg
 build_one
