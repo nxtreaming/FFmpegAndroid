@@ -529,6 +529,10 @@ void * player_decode(void * data) {
 		struct PacketData *packet_data;
 		pthread_mutex_lock(&player->mutex_queue);
 pop:
+		while (player->pause) {
+			// we try to sleep 10ms
+			pthread_cond_timeout_np(&player->cond_queue, &player->mutex_queue, 10);
+		}
 		packet_data = queue_pop_start_impl(&queue,
 			&player->mutex_queue, &player->cond_queue,
 			(QueueCheckFunc) player_decode_queue_check_func, decoder_data,
@@ -689,6 +693,9 @@ void * player_read_from_stream(void *data) {
 	}
 
 	for (;;) {
+		//while (player->pause) {
+		//	pthread_cond_timeout_np(&player->cond_queue, &player->mutex_queue, 10);
+		//}
 		int ret = av_read_frame(player->input_format_ctx, pkt);
 		if (ret < 0) {
 			pthread_mutex_lock(&player->mutex_queue);
