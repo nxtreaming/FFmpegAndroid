@@ -78,7 +78,8 @@ Queue *queue_init_with_custom_lock(int size, queue_fill_func fill_func,
 	}
 
 	goto end;
-	free_tabs: for (i = queue->size - 1; i >= 0; --i) {
+free_tabs:
+	for (i = queue->size - 1; i >= 0; --i) {
 		void *elem = queue->tab[i];
 		if (elem == NULL)
 			continue;
