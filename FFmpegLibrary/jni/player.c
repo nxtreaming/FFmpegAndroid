@@ -54,7 +54,6 @@
 #include "jni-protocol.h"
 #include "aes-protocol.h"
 
-#define FFMPEG_LOG_LEVEL AV_LOG_DEBUG
 #define LOG_LEVEL 2
 #define LOG_TAG "player.c"
 #define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
@@ -308,30 +307,6 @@ struct timespec timespec_diff(struct timespec start, struct timespec end)
 	return temp;
 }
 #endif // MEASURE_TIME
-
-void ffmpeg_log_callback(void* avcl, int level, const char* fmt, va_list vl) {
-	if (level > av_log_get_level())
-	        return;
-	int andriod_level = ANDROID_LOG_DEFAULT;
-	if (level > AV_LOG_DEBUG) {
-		andriod_level = ANDROID_LOG_DEBUG;
-	} else if (level > AV_LOG_VERBOSE) {
-		andriod_level = ANDROID_LOG_VERBOSE;
-	} else if (level > AV_LOG_INFO) {
-		andriod_level = ANDROID_LOG_INFO;
-	} else if (level > AV_LOG_WARNING) {
-		andriod_level = ANDROID_LOG_WARN;
-	} else if (level > AV_LOG_ERROR) {
-		andriod_level = ANDROID_LOG_ERROR;
-	} else if (level > AV_LOG_FATAL) {
-		andriod_level = ANDROID_LOG_FATAL;
-	} else if (level > AV_LOG_PANIC) {
-		andriod_level = ANDROID_LOG_FATAL;
-	} else if (level > AV_LOG_QUIET) {
-		andriod_level = ANDROID_LOG_SILENT;
-	}
-	__android_log_vprint(andriod_level, "FFmpeg", fmt, vl);
-}
 
 void throw_exception(JNIEnv *env, const char * exception_class_path_name,
 		const char *msg) {
@@ -2590,8 +2565,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 	player->stop = TRUE;
 	player->flush_video_play = FALSE;
 
-	av_log_set_callback(ffmpeg_log_callback);
-	av_log_set_level(FFMPEG_LOG_LEVEL);
+	av_log_set_level(AV_LOG_DEBUG);
 	avformat_network_init();
 	av_register_all();
 	register_jni_protocol(player->get_javavm);
