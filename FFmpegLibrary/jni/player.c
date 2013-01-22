@@ -465,7 +465,8 @@ static void player_print_subtitle(AVSubtitle *sub, double pts) {
 		LOGI(3, "player_decode_subtitles --rect->ass = %s", rect->ass);
 #if LIBAVCODEC_VERSION_INT > AV_VERSION_INT(54,70,100)
 		LOGI(3,
-				"player_decode_subtitles --rect->flags(forced) = %s", (rect->flags & AV_SUBTITLE_FLAG_FORCED) ? "true" : "false");
+				"player_decode_subtitles --rect->flags(forced) = %s",
+				(rect->flags & AV_SUBTITLE_FLAG_FORCED) ? "true" : "false");
 #else
 		LOGI(3,
 				"player_decode_subtitles --rect->forced = %s", rect->forced ? "true" : "false");
@@ -1152,8 +1153,7 @@ exit_loop:
 
 seek_loop:
 		// setting stream thet will be used as a base for seeking
-		seek_input_stream_number =
-				player->input_stream_numbers[player->video_stream_no];
+		seek_input_stream_number = player->input_stream_numbers[player->video_stream_no];
 		seek_input_stream = player->input_streams[player->video_stream_no];
 
 		// getting seek target time in time_base value
@@ -1508,7 +1508,8 @@ int player_find_stream(struct Player *player, enum AVMediaType codec_type,
 
 	if (codec_type == AVMEDIA_TYPE_VIDEO) {
 		LOGI(5,
-				"player_set_data_source Video size is [%d x %d]", player->input_codec_ctxs[streams_no]->width, player->input_codec_ctxs[streams_no]->height);
+				"player_set_data_source Video size is [%d x %d]",
+				player->input_codec_ctxs[streams_no]->width, player->input_codec_ctxs[streams_no]->height);
 	}
 
 	player->caputre_streams_no += 1;
@@ -1836,7 +1837,10 @@ int player_create_audio_track(struct Player *player, struct State *state) {
 			|| ctx->sample_rate != audio_track_sample_rate) {
 
 		LOGI(3,
-				"player_set_data_sourcd preparing conversion of %d Hz %s %d channels to %d Hz %s %d channels", ctx->sample_rate, av_get_sample_fmt_name(ctx->sample_fmt), ctx->channels, audio_track_sample_rate, av_get_sample_fmt_name(player->audio_track_format), player->audio_track_channel_count);
+				"player_set_data_sourcd preparing conversion of %d Hz %s %d channels to %d Hz %s %d channels",
+				ctx->sample_rate, av_get_sample_fmt_name(ctx->sample_fmt), ctx->channels,
+				audio_track_sample_rate, av_get_sample_fmt_name(player->audio_track_format),
+				player->audio_track_channel_count);
 		player->swr_context = (struct SwrContext *) swr_alloc_set_opts(NULL,
 				audio_track_layout, player->audio_track_format,
 				audio_track_sample_rate, dec_channel_layout, ctx->sample_fmt,
@@ -1844,7 +1848,11 @@ int player_create_audio_track(struct Player *player, struct State *state) {
 
 		if (!player->swr_context || swr_init(player->swr_context) < 0) {
 			LOGE(1,
-					"Cannot create sample rate converter for conversion of %d Hz %s %d channels to %d Hz %s %d channels!", ctx->sample_rate, av_get_sample_fmt_name(ctx->sample_fmt), ctx->channels, audio_track_sample_rate, av_get_sample_fmt_name(player->audio_track_format), player->audio_track_channel_count);
+					"Cannot create sample rate converter for conversion of %d Hz %s %d "
+					"channels to %d Hz %s %d channels!", ctx->sample_rate,
+					av_get_sample_fmt_name(ctx->sample_fmt), ctx->channels,
+					audio_track_sample_rate, av_get_sample_fmt_name(player->audio_track_format),
+					player->audio_track_channel_count);
 			return -ERROR_COULD_NOT_INIT_SWR_CONTEXT;
 		}
 	}
@@ -2724,7 +2732,9 @@ test:
 				- (int64_t) (time_diff / 1000L);
 
 		LOGI(9,
-				"jni_player_render_frame current_time: %lld, write_time: %lld, time_diff: %lld, elem->time: %f, player->audio_clock: %f", current_time, player->audio_write_time, time_diff, elem->time, player->audio_clock);
+				"jni_player_render_frame current_time: "
+				"%lld, write_time: %lld, time_diff: %lld, elem->time: %f, player->audio_clock: %f",
+				current_time, player->audio_write_time, time_diff, elem->time, player->audio_clock);
 
 		LOGI(9, "jni_player_render_frame sleep_time: %ld", sleep_time);
 		if (sleep_time <= MIN_SLEEP_TIME_MS) {
