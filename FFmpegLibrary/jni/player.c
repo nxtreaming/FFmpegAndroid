@@ -154,7 +154,7 @@ struct Player {
 	pthread_mutex_t mutex_queue;
 	pthread_cond_t cond_queue;
 	Queue *packets_queue[MAX_STREAMS];
-	Queue *reg_video_queue;
+	Queue *rgb_video_queue;
 
 	int interrupt_renderer;
 	int pause;
@@ -308,18 +308,18 @@ int player_decode_audio(struct DecoderData * decoder_data, JNIEnv * env,
 void player_decode_video_flush(struct DecoderData * decoder_data, JNIEnv * env) {
 	struct Player *player = decoder_data->player;
 	if (!player->rendering) {
-		LOGI(2, "player_decode_video not rendering flushing reg_video_queue");
+		LOGI(2, "player_decode_video not rendering flushing rgb_video_queue");
 		struct VideoRGBFrameElem *elem;
 		while ((elem = queue_pop_start_impl_non_block(
-				player->reg_video_queue)) != NULL) {
-			queue_pop_finish_impl(player->reg_video_queue, &player->mutex_queue, &player->cond_queue);
+				player->rgb_video_queue)) != NULL) {
+			queue_pop_finish_impl(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
 		}
 	} else {
 		LOGI(2,
-				"player_decode_video rendering sending reg_video_queue flush request");
+				"player_decode_video rendering sending rgb_video_queue flush request");
 		player->flush_video_play = TRUE;
 		pthread_cond_broadcast(&player->cond_queue);
-		LOGI(2, "player_decode_video waiting for reg_video_queue flush");
+		LOGI(2, "player_decode_video waiting for rgb_video_queue flush");
 		while (player->flush_video_play)
 			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 	}
@@ -344,7 +344,7 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 	if (packet_data->end_of_stream) {
 		LOGI(2, "player_decode_video waiting for queue to end of stream");
 		pthread_mutex_lock(&player->mutex_queue);
-		elem = queue_push_start_impl(player->reg_video_queue,
+		elem = queue_push_start_impl(player->rgb_video_queue,
 			&player->mutex_queue, &player->cond_queue, &to_write,
 			(QueueCheckFunc) player_decode_queue_check_func, decoder_data,
 			(void **) &interrupt_ret);
@@ -361,7 +361,7 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 		}
 		elem->end_of_stream = TRUE;
 		LOGI(2, "player_decode_video sending end of stream");
-		queue_push_finish_impl(player->reg_video_queue,
+		queue_push_finish_impl(player->rgb_video_queue,
 			&player->mutex_queue, &player->cond_queue, to_write);
 		pthread_mutex_unlock(&player->mutex_queue);
 		return 0;
@@ -409,7 +409,7 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 #endif
 
 	pthread_mutex_lock(&player->mutex_queue);
-	elem = queue_push_start_impl(player->reg_video_queue,
+	elem = queue_push_start_impl(player->rgb_video_queue,
 		&player->mutex_queue, &player->cond_queue, &to_write,
 		(QueueCheckFunc) player_decode_queue_check_func, decoder_data,
 		(void **) &interrupt_ret);
@@ -495,7 +495,7 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 	AndroidBitmap_unlockPixels(env, elem->jbitmap);
 
 fail_lock_bitmap:
-	queue_push_finish(player->reg_video_queue, &player->mutex_queue,
+	queue_push_finish(player->rgb_video_queue, &player->mutex_queue,
 		&player->cond_queue, to_write);
 	return err;
 }
@@ -1345,10 +1345,10 @@ void player_alloc_queues_free(struct State *state) {
 
 void player_prepare_rgb_frames_free(struct State *state) {
 	struct Player *player = state->player;
-	if (player->reg_video_queue != NULL) {
+	if (player->rgb_video_queue != NULL) {
 		LOGI(7, "player_set_data_source free_video_frames_queue");
-		queue_free(player->reg_video_queue, &player->mutex_queue, &player->cond_queue, state);
-		player->reg_video_queue = NULL;
+		queue_free(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue, state);
+		player->rgb_video_queue = NULL;
 		LOGI(7, "player_set_data_source fried_video_frames_queue");
 	}
 }
@@ -1356,11 +1356,11 @@ void player_prepare_rgb_frames_free(struct State *state) {
 int player_prepare_rgb_frames(struct DecoderState *decoder_state, struct State *state) {
 	struct Player *player = decoder_state->player;
 
-	player->reg_video_queue = queue_init_with_custom_lock(8,
+	player->rgb_video_queue = queue_init_with_custom_lock(8,
 		(queue_fill_func) player_fill_video_rgb_frame,
 		(queue_free_func) player_free_video_rgb_frame, decoder_state,
 		state, &player->mutex_queue, &player->cond_queue);
-	if (player->reg_video_queue == NULL) {
+	if (player->rgb_video_queue == NULL) {
 		return -ERROR_COULD_NOT_PREPARE_RGB_QUEUE;
 	}
 	return 0;
@@ -2157,7 +2157,7 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 
 pop:
 	LOGI(4, "jni_player_render_frame reading from queue");
-	elem = queue_pop_start_impl(&player->reg_video_queue,
+	elem = queue_pop_start_impl(&player->rgb_video_queue,
 			&player->mutex_queue, &player->cond_queue,
 			(QueueCheckFunc) player_render_frame_check_func, player,
 			&interrupt_ret);
@@ -2177,13 +2177,13 @@ pop:
 			if (elem->end_of_stream) {
 				LOGI(4, "jni_player_render_frame end of stream");
 				player_update_current_time(&state, TRUE);
-				queue_pop_finish_impl(player->reg_video_queue,
+				queue_pop_finish_impl(player->rgb_video_queue,
 						&player->mutex_queue, &player->cond_queue);
 				goto pop;
 			}
 			QueueCheckFuncRet ret;
 test:
-			ret = player_render_frame_check_func(player->reg_video_queue,
+			ret = player_render_frame_check_func(player->rgb_video_queue,
 					player, &interrupt_ret);
 			switch (ret) {
 			case QUEUE_CHECK_FUNC_RET_WAIT:
@@ -2193,7 +2193,7 @@ test:
 			case QUEUE_CHECK_FUNC_RET_SKIP:
 				skip = TRUE;
 				LOGI(1, "jni_player_render_frame queue skip");
-				queue_pop_finish_impl(player->reg_video_queue, &player->mutex_queue, &player->cond_queue);
+				queue_pop_finish_impl(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
 				break;
 			case QUEUE_CHECK_FUNC_RET_TEST:
 				break;
@@ -2214,8 +2214,8 @@ test:
 				LOGI(2, "jni_player_render_frame flush");
 				struct VideoRGBFrameElem *elem;
 				while ((elem = queue_pop_start_impl_non_block(
-						player->reg_video_queue)) != NULL) {
-					queue_pop_finish_impl(player->reg_video_queue, &player->mutex_queue, &player->cond_queue);
+						player->rgb_video_queue)) != NULL) {
+					queue_pop_finish_impl(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
 				}
 				LOGI(2, "jni_player_render_frame flushed");
 				player->flush_video_play = FALSE;
@@ -2291,7 +2291,7 @@ void jni_player_release_frame(JNIEnv *env, jobject thiz) {
 	struct timespec diff = timespec_diff(render_frame_start, render_frame_stop);
 	LOGI(7, "render timediff: %d.%9ld",diff.tv_sec, diff.tv_nsec);
 #endif
-	queue_pop_finish(player->reg_video_queue, &player->mutex_queue, &player->cond_queue);
+	queue_pop_finish(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
 	LOGI(7, "jni_player_release_frame rendered");
 }
 
