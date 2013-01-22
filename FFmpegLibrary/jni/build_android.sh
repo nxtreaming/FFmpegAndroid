@@ -268,15 +268,10 @@ EOF
 	    --disable-parsers \
 	    --disable-protocols \
 	    --enable-libass \
-	    --enable-hwaccel=h264_vaapi \
-	    --enable-hwaccel=h264_vaapi \
-	    --enable-hwaccel=h264_dxva2 \
-	    --enable-hwaccel=mpeg4_vaapi \
 	    --enable-demuxer=mov \
 	    --enable-demuxer=rtsp \
 	    --enable-demuxer=rtp \
 	    --enable-demuxer=hls \
-	    --enable-protocol=crypto \
 	    --enable-protocol=file \
 	    --enable-protocol=rtp \
 	    --enable-protocol=tcp \
@@ -292,14 +287,9 @@ EOF
 	    --enable-decoder=aac \
 	    --enable-parser=h264 \
 	    --enable-parser=aac \
-	    --enable-hwaccels \
 	    --enable-zlib \
 	    --disable-doc \
-	    --disable-ffplay \
-	    --disable-ffmpeg \
-	    --disable-ffplay \
-	    --disable-ffprobe \
-	    --disable-ffserver \
+	    --disable-programs \
 	    --enable-nonfree \
 	    --enable-version3 \
 	    --enable-memalign-hack \
@@ -332,11 +322,11 @@ PREBUILT=$NDK/toolchains/arm-linux-androideabi-4.6/prebuilt/$OS-x86
 PLATFORM_VERSION=android-5
 #build_amr
 #build_aac
-build_fribidi
-build_freetype2
-build_ass
-build_ffmpeg
-build_one
+#build_fribidi
+#build_freetype2
+#build_ass
+#build_ffmpeg
+#build_one
 
 #x86
 #EABIARCH=i686-linux-android
