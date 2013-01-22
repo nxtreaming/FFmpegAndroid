@@ -85,14 +85,18 @@ Queue *queue_init_with_custom_lock(int size, queue_fill_func fill_func,
 		queue->free_func(free_obj, elem);
 	}
 
-	free_tab: free(queue->tab);
+free_tab:
+	free(queue->tab);
 
-	free_ready: free(queue->ready);
+free_ready:
+	free(queue->ready);
 
-	free_queue: free(queue);
+free_queue:
+	free(queue);
 	queue = NULL;
 
-	end: return queue;
+end:
+	return queue;
 }
 
 void queue_free(Queue *queue, pthread_mutex_t * mutex, pthread_cond_t *cond, void *free_obj) {
@@ -108,9 +112,7 @@ void queue_free(Queue *queue, pthread_mutex_t * mutex, pthread_cond_t *cond, voi
 	pthread_mutex_unlock(mutex);
 
 	free(queue->tab);
-
 	free(queue->ready);
-
 	free(queue);
 }
 
@@ -130,13 +132,13 @@ void *queue_push_start_impl(Queue *queue, pthread_mutex_t * mutex,
 			goto test;
 		else
 			assert(FALSE);
-
-		test: next_next_to_write = queue_get_next(queue, queue->next_to_write);
+test:
+		next_next_to_write = queue_get_next(queue, queue->next_to_write);
 		if (next_next_to_write != queue->next_to_read) {
 			break;
 		}
-
-		wait: pthread_cond_wait(cond, mutex);
+wait:
+		pthread_cond_wait(cond, mutex);
 	}
 	*to_write = queue->next_to_write;
 	queue->ready[*to_write] = FALSE;
@@ -145,7 +147,8 @@ void *queue_push_start_impl(Queue *queue, pthread_mutex_t * mutex,
 
 	pthread_cond_broadcast(cond);
 
-	end: return queue->tab[*to_write];
+end:
+	return queue->tab[*to_write];
 }
 
 void *queue_push_start(Queue *queue, pthread_mutex_t * mutex,
@@ -201,23 +204,24 @@ void *queue_pop_start_impl(Queue **queue, pthread_mutex_t * mutex,
 			goto test;
 		else
 			assert(FALSE);
-		test:
+test:
 		q = *queue;
 		assert(!q->in_read);
 		if (q->next_to_read != q->next_to_write
 				&& q->ready[q->next_to_read])
 			break;
-		wait: pthread_cond_wait(cond, mutex);
+wait:
+		pthread_cond_wait(cond, mutex);
 	}
 	q=*queue;
 	to_read = q->next_to_read;
 	q->in_read = TRUE;
 
-	end:
-
+end:
 	return q->tab[to_read];
 
-	skip: return NULL;
+skip:
+	return NULL;
 }
 
 void *queue_pop_start(Queue **queue, pthread_mutex_t * mutex,
