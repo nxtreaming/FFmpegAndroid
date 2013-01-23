@@ -1643,7 +1643,7 @@ void player_play_prepare(struct Player *player) {
 	pthread_mutex_unlock(&player->mutex_queue);
 }
 
-void player_stop_without_lock(struct State * state) {
+void player_stop_impl(struct State * state) {
 	int ret;
 	struct Player *player = state->player;
 
@@ -1651,7 +1651,7 @@ void player_stop_without_lock(struct State * state) {
 		return;
 	player->playing = FALSE;
 
-	LOGI(7, "player_stop_without_lock stopping...");
+	LOGI(7, "player_stop_impl stopping...");
 
 	player_play_prepare_free(player);
 	player_start_decoding_threads_free(player);
@@ -1668,7 +1668,7 @@ void player_stop_without_lock(struct State * state) {
 
 void player_stop(struct State * state) {
 	pthread_mutex_lock(&state->player->mutex_operation);
-	player_stop_without_lock(state);
+	player_stop_impl(state);
 	pthread_mutex_unlock(&state->player->mutex_operation);
 }
 
@@ -1681,7 +1681,7 @@ int player_set_data_source(struct State *state, const char *file_path,
 
 	pthread_mutex_lock(&player->mutex_operation);
 
-	player_stop_without_lock(state);
+	player_stop_impl(state);
 
 	if (player->playing)
 		goto end;
