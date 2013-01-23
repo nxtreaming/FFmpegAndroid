@@ -72,33 +72,9 @@
 
 //#define MEASURE_TIME
 
-struct VideoRGBFrameElem {
-	AVFrame *frame;
-	jobject jbitmap;
-	double time;
-	int end_of_stream;
-};
-
-struct PacketData {
-	int end_of_stream;
-	AVPacket *packet;
-};
-
-struct DecoderState {
-	int stream_no;
-	struct Player *player;
-	JNIEnv* env;
-	jobject thiz;
-};
-
-struct DecoderData {
-	struct Player *player;
-	int stream_no;
-};
-
 #define MAX_STREAMS 2
 
-struct Player {
+typedef struct Player {
 	JavaVM *get_javavm;
 
 	jclass player_class;
@@ -176,13 +152,37 @@ struct Player {
 #ifdef YUV2RGB
 	int dither;
 #endif
-};
+} Player;
 
-struct State {
+typedef struct State {
+	Player *player;
+	JNIEnv* env;
+	jobject thiz;
+} State;
+
+typedef struct DecoderState {
+	int stream_no;
 	struct Player *player;
 	JNIEnv* env;
 	jobject thiz;
-};
+} DecoderState;
+
+typedef struct DecoderData {
+	struct Player *player;
+	int stream_no;
+} DecoderData;
+
+typedef struct VideoRGBFrameElem {
+	AVFrame *frame;
+	jobject jbitmap;
+	double time;
+	int end_of_stream;
+} VideoRGBFrameElem;
+
+typedef struct PacketData {
+	int end_of_stream;
+	AVPacket *packet;
+} PacketData;
 
 #ifdef MEASURE_TIME
 struct timespec render_frame_start, render_frame_stop;
@@ -221,8 +221,8 @@ void throw_runtime_exception(JNIEnv *env, const char * msg) {
 }
 
 QueueCheckFuncRet player_decode_queue_check(Queue *queue,
-		struct DecoderData *decoderData, int *ret) {
-	struct Player *player = decoderData->player;
+		DecoderData *decoderData, int *ret) {
+	Player *player = decoderData->player;
 	int stream_no = decoderData->stream_no;
 	if (player->stop_streams[stream_no]) {
 		*ret = DECODE_CHECK_MSG_STOP;
@@ -235,15 +235,15 @@ QueueCheckFuncRet player_decode_queue_check(Queue *queue,
 	return QUEUE_CHECK_FUNC_RET_TEST;
 }
 
-void player_decode_audio_flush(struct DecoderData * decoder_data, JNIEnv * env) {
-	struct Player *player = decoder_data->player;
+void player_decode_audio_flush(DecoderData * decoder_data, JNIEnv * env) {
+	Player *player = decoder_data->player;
 	(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
 }
 
-int player_decode_audio(struct DecoderData * decoder_data, JNIEnv * env,
-		struct PacketData *packet_data) {
+int player_decode_audio(DecoderData * decoder_data, JNIEnv * env,
+		PacketData *packet_data) {
 	int got_frame_ptr;
-	struct Player *player = decoder_data->player;
+	Player *player = decoder_data->player;
 	int stream_no = decoder_data->stream_no;
 	AVCodecContext * ctx = player->input_codec_ctxs[stream_no];
 	AVFrame * frame = player->input_frames[stream_no];
@@ -299,11 +299,11 @@ int player_decode_audio(struct DecoderData * decoder_data, JNIEnv * env,
 	return 0;
 }
 
-void player_decode_video_flush(struct DecoderData * decoder_data, JNIEnv * env) {
-	struct Player *player = decoder_data->player;
+void player_decode_video_flush(DecoderData * decoder_data, JNIEnv * env) {
+	Player *player = decoder_data->player;
 	if (!player->rendering) {
 		LOGI(2, "player_decode_video not rendering flushing rgb_video_queue");
-		struct VideoRGBFrameElem *elem;
+		VideoRGBFrameElem *elem;
 		while ((elem = queue_pop_start_impl_non_block(
 				player->rgb_video_queue)) != NULL) {
 			queue_pop_finish_impl(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
@@ -319,17 +319,17 @@ void player_decode_video_flush(struct DecoderData * decoder_data, JNIEnv * env) 
 	}
 }
 
-int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
-		struct PacketData *packet_data) {
+int player_decode_video(DecoderData * decoder_data, JNIEnv * env,
+		PacketData *packet_data) {
 	int got_frame_ptr;
-	struct Player *player = decoder_data->player;
+	Player *player = decoder_data->player;
 	int stream_no = decoder_data->stream_no;
 	AVCodecContext * ctx = player->input_codec_ctxs[stream_no];
 	AVFrame * frame = player->input_frames[stream_no];
 	AVStream * stream = player->input_streams[stream_no];
 	int interrupt_ret;
 	int to_write;
-	struct VideoRGBFrameElem * elem;
+	VideoRGBFrameElem * elem;
 
 #ifdef MEASURE_TIME
 	struct timespec timespec1, timespec2, diff;
@@ -495,8 +495,8 @@ fail_lock_bitmap:
 
 void * player_decode(void * data) {
 	int err = ERROR_NO_ERROR;
-	struct DecoderData *decoder_data = data;
-	struct Player *player = decoder_data->player;
+	DecoderData *decoder_data = data;
+	Player *player = decoder_data->player;
 	int stream_no = decoder_data->stream_no;
 	Queue *queue = player->packets_queue[stream_no];
 	AVCodecContext * ctx = player->input_codec_ctxs[stream_no];
@@ -519,7 +519,7 @@ void * player_decode(void * data) {
 	for (;;) {
 		LOGI(10, "player_decode waiting for frame[%d]", stream_no);
 		int interrupt_ret;
-		struct PacketData *packet_data;
+		PacketData *packet_data;
 		pthread_mutex_lock(&player->mutex_queue);
 pop:
 		while (player->pause) {
@@ -577,14 +577,12 @@ pop:
 			goto stop;
 		}
 		continue;
-
 stop:
 		LOGI(2, "player_decode stop[%d]", stream_no);
 		stop = TRUE;
-
 flush:
 		LOGI(2, "player_decode flush[%d]", stream_no);
-		struct PacketData *to_free; // FIXME move to struct PacketData
+		PacketData *to_free; // FIXME move to PacketData
 		while ((to_free = queue_pop_start_impl_non_block(queue))
 				!= NULL) {
 			if (!to_free->end_of_stream) {
@@ -616,8 +614,7 @@ flush:
 	}
 
 detach_current_thread:
-	ret = (*player->get_javavm)->DetachCurrentThread(
-			player->get_javavm);
+	ret = (*player->get_javavm)->DetachCurrentThread(player->get_javavm);
 	if (ret && !err)
 		err = ERROR_COULD_NOT_DETACH_THREAD;
 
@@ -629,7 +626,7 @@ end: free(decoder_data);
 }
 
 QueueCheckFuncRet player_read_stream_check(Queue *queue,
-		struct Player *player, int *ret) {
+		Player *player, int *ret) {
 	if (player->stop) {
 		*ret = READ_FROM_STREAM_CHECK_MSG_STOP;
 		return QUEUE_CHECK_FUNC_RET_SKIP;
@@ -641,7 +638,7 @@ QueueCheckFuncRet player_read_stream_check(Queue *queue,
 	return QUEUE_CHECK_FUNC_RET_TEST;
 }
 
-static void player_assign_to_no_boolean_array(struct Player *player, int* array,
+static void player_assign_to_no_boolean_array(Player *player, int* array,
 		int value) {
 	int capture_streams_no = player->caputre_streams_no;
 	int stream_no;
@@ -649,7 +646,7 @@ static void player_assign_to_no_boolean_array(struct Player *player, int* array,
 		array[stream_no] = value;
 	}
 }
-static int player_if_all_no_array_elements_has_value(struct Player *player,
+static int player_if_all_no_array_elements_has_value(Player *player,
 		int *array, int value) {
 	int capture_streams_no = player->caputre_streams_no;
 	int stream_no;
@@ -661,7 +658,7 @@ static int player_if_all_no_array_elements_has_value(struct Player *player,
 }
 
 void * player_read_stream(void *data) {
-	struct Player *player = (struct Player *) data;
+	Player *player = (Player *) data;
 	int err = ERROR_NO_ERROR;
 
 	AVPacket packet, *pkt = &packet;
@@ -670,7 +667,7 @@ void * player_read_stream(void *data) {
 	Queue *queue;
 	int seek_input_stream_number;
 	AVStream * seek_input_stream;
-	struct PacketData *packet_data;
+	PacketData *packet_data;
 	int to_write;
 	int interrupt_ret;
 	JavaVMAttachArgs thread_spec = { JNI_VERSION_1_4, "FFmpegReadFromStream", NULL };
@@ -863,9 +860,9 @@ end:
 	return NULL;
 }
 
-int player_write_audio(struct DecoderData *decoder_data, JNIEnv *env,
+int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
 		int64_t pts, uint8_t *data, int data_size, int original_data_size) {
-	struct Player *player = decoder_data->player;
+	Player *player = decoder_data->player;
 	int stream_no = decoder_data->stream_no;
 	int err = ERROR_NO_ERROR;
 	int ret;
@@ -923,17 +920,17 @@ end:
 	return err;
 }
 
-struct Player * player_get_player_field(JNIEnv *env, jobject thiz) {
+Player * player_get_player_field(JNIEnv *env, jobject thiz) {
 
 	jfieldID m_native_layer_field = java_get_field(env, player_class_path_name,
 			player_m_native_player);
-	struct Player * player = (struct Player *) (*env)->GetIntField(env, thiz,
+	Player * player = (Player *) (*env)->GetIntField(env, thiz,
 			m_native_layer_field);
 	return player;
 }
 
-void *player_fill_packet(struct State *state) {
-	struct PacketData *packet_data = malloc(sizeof(struct PacketData));
+void *player_fill_packet(State *state) {
+	PacketData *packet_data = malloc(sizeof(PacketData));
 	if (packet_data == NULL) {
 		return NULL;
 	}
@@ -945,13 +942,13 @@ void *player_fill_packet(struct State *state) {
 	return packet_data;
 }
 
-void player_free_packet(struct State *player, struct PacketData *elem) {
+void player_free_packet(State *player, PacketData *elem) {
 	free(elem->packet);
 	free(elem);
 }
 
-void player_free_video_rgb_frame(struct State *state,
-		struct VideoRGBFrameElem *elem) {
+void player_free_video_rgb_frame(State *state,
+		VideoRGBFrameElem *elem) {
 	JNIEnv *env = state->env;
 	jobject thiz = state->thiz;
 
@@ -964,14 +961,14 @@ void player_free_video_rgb_frame(struct State *state,
 	LOGI(7, "player_free_video_rgb_frame fried");
 }
 
-void *player_fill_video_rgb_frame(struct DecoderState *decoder_state) {
-	struct Player *player = decoder_state->player;
+void *player_fill_video_rgb_frame(DecoderState *decoder_state) {
+	Player *player = decoder_state->player;
 	JNIEnv *env = decoder_state->env;
 	jobject thiz = decoder_state->thiz;
 	int stream_no = decoder_state->stream_no;
 	AVCodecContext * ctx = player->input_codec_ctxs[player->video_stream_no];
 
-	struct VideoRGBFrameElem * elem = malloc(sizeof(struct VideoRGBFrameElem));
+	VideoRGBFrameElem * elem = malloc(sizeof(VideoRGBFrameElem));
 	if (elem == NULL) {
 		LOGE(1,
 				"player_fill_video_rgb_frame could no allocate VideoRGBFrameEelem");
@@ -1027,8 +1024,8 @@ end:
 	return elem;
 }
 
-void player_update_current_time(struct State *state, int is_finished) {
-	struct Player *player = state->player;
+void player_update_current_time(State *state, int is_finished) {
+	Player *player = state->player;
 	jboolean jis_finished = is_finished ? JNI_TRUE : JNI_FALSE;
 
 	(*state->env)->CallVoidMethod(state->env, state->thiz,
@@ -1036,10 +1033,10 @@ void player_update_current_time(struct State *state, int is_finished) {
 			player->video_duration, jis_finished);
 }
 
-void player_update_time(struct State *state, double time) {
+void player_update_time(State *state, double time) {
 	int time_int = round(time);
 
-	struct Player *player = state->player;
+	Player *player = state->player;
 	if (player->last_updated_time == time_int) {
 		return;
 	}
@@ -1054,7 +1051,7 @@ void player_update_time(struct State *state, double time) {
 	player_update_current_time(state, FALSE);
 }
 
-void player_open_stream_free(struct Player *player, int stream_no) {
+void player_open_stream_free(Player *player, int stream_no) {
 	AVCodecContext ** ctx = &player->input_codec_ctxs[stream_no];
 	if (*ctx != NULL) {
 		avcodec_close(*ctx);
@@ -1062,7 +1059,7 @@ void player_open_stream_free(struct Player *player, int stream_no) {
 	}
 }
 
-int player_open_stream(struct Player *player, AVCodecContext * ctx) {
+int player_open_stream(Player *player, AVCodecContext * ctx) {
 	enum AVCodecID codec_id = ctx->codec_id;
 	LOGI(3, "player_open_stream trying open: %d", codec_id);
 
@@ -1082,7 +1079,7 @@ int player_open_stream(struct Player *player, AVCodecContext * ctx) {
 	return 0;
 }
 
-void player_find_streams_free(struct Player *player) {
+void player_find_streams_free(Player *player) {
 	int capture_streams_no = player->caputre_streams_no;
 	int i;
 	for (i = 0; i < capture_streams_no; ++i) {
@@ -1093,7 +1090,7 @@ void player_find_streams_free(struct Player *player) {
 	player->audio_stream_no = -1;
 }
 
-int player_try_open_stream(struct Player *player, enum AVMediaType codec_type,
+int player_try_open_stream(Player *player, enum AVMediaType codec_type,
 		int stream_no) {
 	if (stream_no < 0)
 		return -1;
@@ -1112,7 +1109,7 @@ int player_try_open_stream(struct Player *player, enum AVMediaType codec_type,
 	return stream_no;
 }
 
-int player_find_stream(struct Player *player, enum AVMediaType codec_type,
+int player_find_stream(Player *player, enum AVMediaType codec_type,
 		int recommended_stream_no) {
 	int streams_no = player->caputre_streams_no;
 	int err = ERROR_NO_ERROR;
@@ -1157,14 +1154,14 @@ uint64_t player_find_layout_from_channels(int nb_channels) {
 }
 
 void player_print_report_video_streams_free(JNIEnv* env, jobject thiz,
-		struct Player *player) {
+		Player *player) {
 	if (player->player_set_stream_info != NULL)
 		(*env)->CallVoidMethod(env, thiz, player->player_set_stream_info,
 				NULL);
 }
 
 int player_print_report_video_streams(JNIEnv* env, jobject thiz,
-		struct Player *player) {
+		Player *player) {
 	int i;
 	int err = ERROR_NO_ERROR;
 	jclass stream_info_class = (*env)->FindClass(env,
@@ -1277,7 +1274,7 @@ free_map_class:
 	return err;
 }
 
-int player_alloc_frames_free(struct Player *player) {
+int player_alloc_frames_free(Player *player) {
 	int capture_streams_no = player->caputre_streams_no;
 	int stream_no;
 	for (stream_no = 0; stream_no < capture_streams_no; ++stream_no) {
@@ -1288,7 +1285,7 @@ int player_alloc_frames_free(struct Player *player) {
 	return 0;
 }
 
-int player_alloc_frames(struct Player *player) {
+int player_alloc_frames(Player *player) {
 	int capture_streams_no = player->caputre_streams_no;
 	int stream_no;
 	for (stream_no = 0; stream_no < capture_streams_no; ++stream_no) {
@@ -1300,8 +1297,8 @@ int player_alloc_frames(struct Player *player) {
 	return 0;
 }
 
-int player_alloc_queues(struct State *state) {
-	struct Player *player = state->player;
+int player_alloc_queues(State *state) {
+	Player *player = state->player;
 	int capture_streams_no = player->caputre_streams_no;
 	int stream_no;
 	for (stream_no = 0; stream_no < capture_streams_no; ++stream_no) {
@@ -1316,8 +1313,8 @@ int player_alloc_queues(struct State *state) {
 	return 0;
 }
 
-void player_alloc_queues_free(struct State *state) {
-	struct Player *player = state->player;
+void player_alloc_queues_free(State *state) {
+	Player *player = state->player;
 	int capture_streams_no = player->caputre_streams_no;
 	int stream_no;
 	for (stream_no = 0; stream_no < capture_streams_no; ++stream_no) {
@@ -1328,8 +1325,8 @@ void player_alloc_queues_free(struct State *state) {
 	}
 }
 
-void player_prepare_rgb_frames_free(struct State *state) {
-	struct Player *player = state->player;
+void player_prepare_rgb_frames_free(State *state) {
+	Player *player = state->player;
 	if (player->rgb_video_queue != NULL) {
 		LOGI(7, "player_set_data_source free_video_frames_queue");
 		queue_free(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue, state);
@@ -1338,8 +1335,8 @@ void player_prepare_rgb_frames_free(struct State *state) {
 	}
 }
 
-int player_prepare_rgb_frames(struct DecoderState *decoder_state, struct State *state) {
-	struct Player *player = decoder_state->player;
+int player_prepare_rgb_frames(DecoderState *decoder_state, State *state) {
+	Player *player = decoder_state->player;
 
 	player->rgb_video_queue = queue_init_with_custom_lock(8,
 		(queue_fill_func) player_fill_video_rgb_frame,
@@ -1351,7 +1348,7 @@ int player_prepare_rgb_frames(struct DecoderState *decoder_state, struct State *
 	return 0;
 }
 
-int player_preapre_sws_context(struct Player *player) {
+int player_preapre_sws_context(Player *player) {
 	AVCodecContext * ctx = player->input_codec_ctxs[player->video_stream_no];
 	int destWidth = ctx->width;
 	int destHeight = ctx->height;
@@ -1367,7 +1364,7 @@ int player_preapre_sws_context(struct Player *player) {
 	return 0;
 }
 
-void player_preapre_sws_context_free(struct Player *player) {
+void player_preapre_sws_context_free(Player *player) {
 	if (player->sws_context != NULL) {
 		LOGI(7, "player_set_data_source free_sws_context");
 		sws_freeContext(player->sws_context);
@@ -1375,7 +1372,7 @@ void player_preapre_sws_context_free(struct Player *player) {
 	}
 }
 
-void player_create_audio_track_free(struct Player *player, struct State *state) {
+void player_create_audio_track_free(Player *player, State *state) {
 	if (player->swr_context != NULL) {
 		swr_free(&player->swr_context);
 		player->swr_context = NULL;
@@ -1396,7 +1393,7 @@ void player_create_audio_track_free(struct Player *player, struct State *state) 
 	}
 }
 
-int player_create_audio_track(struct Player *player, struct State *state) {
+int player_create_audio_track(Player *player, State *state) {
 	//creating audio track
 	AVCodecContext * ctx = player->input_codec_ctxs[player->audio_stream_no];
 	int sample_rate = ctx->sample_rate;
@@ -1459,7 +1456,7 @@ int player_create_audio_track(struct Player *player, struct State *state) {
 	return 0;
 }
 
-void player_get_video_duration(struct Player *player) {
+void player_get_video_duration(Player *player) {
 	player->last_updated_time = -1;
 	player->video_duration = 0;
 	int i;
@@ -1493,7 +1490,7 @@ void player_get_video_duration(struct Player *player) {
 	}
 }
 
-int player_start_decoding_threads(struct Player *player) {
+int player_start_decoding_threads(Player *player) {
 	pthread_attr_t attr;
 	int ret;
 	int i;
@@ -1504,8 +1501,8 @@ int player_start_decoding_threads(struct Player *player) {
 		goto end;
 	}
 	for (i = 0; i < player->caputre_streams_no; ++i) {
-		struct DecoderData * decoder_data = malloc(sizeof(decoder_data));
-		*decoder_data = (struct DecoderData) {player, i};
+		DecoderData * decoder_data = malloc(sizeof(decoder_data));
+		*decoder_data = (DecoderData) {player, i};
 		ret = pthread_create(&player->decode_threads[i], &attr, player_decode,
 				decoder_data);
 		if (ret) {
@@ -1533,7 +1530,7 @@ end:
 	return err;
 }
 
-int player_start_decoding_threads_free(struct Player *player) {
+int player_start_decoding_threads_free(Player *player) {
 	int err = 0;
 	int ret;
 	int i;
@@ -1557,14 +1554,14 @@ int player_start_decoding_threads_free(struct Player *player) {
 	return err;
 }
 
-void player_create_context_free(struct Player *player) {
+void player_create_context_free(Player *player) {
 	if (player->input_format_ctx != NULL) {
 		LOGI(7, "player_set_data_source remove_context");
 		av_freep(&player->input_format_ctx);
 	}
 }
 
-int player_create_context(struct Player *player) {
+int player_create_context(Player *player) {
 	player->input_format_ctx = avformat_alloc_context();
 	if (player->input_format_ctx == NULL) {
 		LOGE(1, "Could not create AVContext\n");
@@ -1573,7 +1570,7 @@ int player_create_context(struct Player *player) {
 	return 0;
 }
 
-void player_open_input_free(struct Player *player) {
+void player_open_input_free(Player *player) {
 	if (player->input_inited) {
 		LOGI(7, "player_set_data_source close_file");
 		avformat_close_input(&(player->input_format_ctx));
@@ -1581,7 +1578,7 @@ void player_open_input_free(struct Player *player) {
 	}
 }
 
-int player_open_input(struct Player *player, const char *file_path,
+int player_open_input(Player *player, const char *file_path,
 		AVDictionary *dictionary) {
 	int ret;
 	if ((ret = avformat_open_input(&(player->input_format_ctx), file_path, NULL,
@@ -1601,7 +1598,7 @@ int player_open_input(struct Player *player, const char *file_path,
 	return ERROR_NO_ERROR;
 }
 
-int player_find_stream_info(struct Player *player) {
+int player_find_stream_info(Player *player) {
 	if (avformat_find_stream_info(player->input_format_ctx, NULL) < 0) {
 		LOGE(1, "Could not open stream\n");
 		return -ERROR_COULD_NOT_OPEN_STREAM;
@@ -1609,14 +1606,14 @@ int player_find_stream_info(struct Player *player) {
 	return ERROR_NO_ERROR;
 }
 
-void player_play_prepare_free(struct Player *player) {
+void player_play_prepare_free(Player *player) {
 	pthread_mutex_lock(&player->mutex_queue);
 	player->stop = TRUE;
 	pthread_cond_broadcast(&player->cond_queue);
 	pthread_mutex_unlock(&player->mutex_queue);
 }
 
-void player_play_prepare(struct Player *player) {
+void player_play_prepare(Player *player) {
 	LOGI(3, "player_set_data_source 16");
 	pthread_mutex_lock(&player->mutex_queue);
 	player->stop = FALSE;
@@ -1628,9 +1625,9 @@ void player_play_prepare(struct Player *player) {
 	pthread_mutex_unlock(&player->mutex_queue);
 }
 
-void player_stop_impl(struct State * state) {
+void player_stop_impl(State * state) {
 	int ret;
-	struct Player *player = state->player;
+	Player *player = state->player;
 
 	if (!player->playing)
 		return;
@@ -1651,16 +1648,16 @@ void player_stop_impl(struct State * state) {
 	player_create_context_free(player);
 }
 
-void player_stop(struct State * state) {
+void player_stop(State * state) {
 	pthread_mutex_lock(&state->player->mutex_operation);
 	player_stop_impl(state);
 	pthread_mutex_unlock(&state->player->mutex_operation);
 }
 
-int player_set_data_source(struct State *state, const char *file_path,
+int player_set_data_source(State *state, const char *file_path,
 		AVDictionary *dictionary, int video_stream_no, int audio_stream_no,
 		int subtitle_stream_no) {
-	struct Player *player = state->player;
+	Player *player = state->player;
 	int err = ERROR_NO_ERROR;
 	int i;
 
@@ -1708,7 +1705,7 @@ int player_set_data_source(struct State *state, const char *file_path,
 	if ((err = player_alloc_queues(state)) < 0)
 		goto error;
 
-	struct DecoderState video_decoder_state = { player->video_stream_no, player, state->env, state->thiz };
+	DecoderState video_decoder_state = { player->video_stream_no, player, state->env, state->thiz };
 	if ((err = player_prepare_rgb_frames(&video_decoder_state, state)) < 0)
 		goto error;
 
@@ -1757,7 +1754,7 @@ int player_get_next_frame(int current_frame, int max_frame) {
 }
 
 void jni_player_seek(JNIEnv *env, jobject thiz, jint position) {
-	struct Player *player = player_get_player_field(env, thiz);
+	Player *player = player_get_player_field(env, thiz);
 	pthread_mutex_lock(&player->mutex_operation);
 
 	if (!player->playing) {
@@ -1778,7 +1775,7 @@ end:
 }
 
 void jni_player_pause(JNIEnv *env, jobject thiz) {
-	struct Player * player = player_get_player_field(env, thiz);
+	Player * player = player_get_player_field(env, thiz);
 
 	pthread_mutex_lock(&player->mutex_operation);
 
@@ -1809,7 +1806,7 @@ end:
 }
 
 void jni_player_resume(JNIEnv *env, jobject thiz) {
-	struct Player * player = player_get_player_field(env, thiz);
+	Player * player = player_get_player_field(env, thiz);
 	pthread_mutex_lock(&player->mutex_operation);
 
 	if (!player->playing) {
@@ -1901,8 +1898,8 @@ int jni_player_set_data_source(JNIEnv *env, jobject thiz, jstring string,
 	}
 
 	const char *file_path = (*env)->GetStringUTFChars(env, string, NULL);
-	struct Player * player = player_get_player_field(env, thiz);
-	struct State state = { player, env, thiz };
+	Player * player = player_get_player_field(env, thiz);
+	State state = { player, env, thiz };
 
 	int ret = player_set_data_source(&state, file_path, dict, video_stream_no,
 		audio_stream_no, subtitle_stream_no);
@@ -1912,7 +1909,7 @@ int jni_player_set_data_source(JNIEnv *env, jobject thiz, jstring string,
 }
 
 void jni_player_dealloc(JNIEnv *env, jobject thiz) {
-	struct Player *player = player_get_player_field(env, thiz);
+	Player *player = player_get_player_field(env, thiz);
 
 	(*env)->DeleteGlobalRef(env, player->audio_track_class);
 	free(player);
@@ -1925,7 +1922,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 	monstartup("libffmpeg.so");
 #endif
 
-	struct Player *player = malloc(sizeof(struct Player));
+	Player *player = malloc(sizeof(Player));
 	memset(player, 0, sizeof(player));
 	player->audio_stream_no = -1;
 	player->video_stream_no = -1;
@@ -2078,7 +2075,7 @@ end:
 }
 
 QueueCheckFuncRet player_render_frame_check(Queue *queue,
-		struct Player *player, int *check_ret_data) {
+		Player *player, int *check_ret_data) {
 	if (player->interrupt_renderer) {
 		*check_ret_data = RENDER_CHECK_MSG_INTERRUPT;
 		LOGI(6, "player_render_frame_check: interrupt_renderer")
@@ -2105,7 +2102,7 @@ QueueCheckFuncRet player_render_frame_check(Queue *queue,
 }
 
 void jni_player_render_frame_start(JNIEnv *env, jobject thiz) {
-	struct Player * player = player_get_player_field(env, thiz);
+	Player * player = player_get_player_field(env, thiz);
 	pthread_mutex_lock(&player->mutex_queue);
 	assert(!player->rendering);
 	player->rendering = TRUE;
@@ -2115,7 +2112,7 @@ void jni_player_render_frame_start(JNIEnv *env, jobject thiz) {
 }
 
 void jni_player_render_frame_stop(JNIEnv *env, jobject thiz) {
-	struct Player * player = player_get_player_field(env, thiz);
+	Player * player = player_get_player_field(env, thiz);
 	pthread_mutex_lock(&player->mutex_queue);
 	assert(player->rendering);
 	player->rendering = FALSE;
@@ -2125,10 +2122,10 @@ void jni_player_render_frame_stop(JNIEnv *env, jobject thiz) {
 }
 
 jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
-	struct Player * player = player_get_player_field(env, thiz);
-	struct State state = { player, env, thiz };
+	Player * player = player_get_player_field(env, thiz);
+	State state = { player, env, thiz };
 	int interrupt_ret;
-	struct VideoRGBFrameElem *elem;
+	VideoRGBFrameElem *elem;
 #ifdef MEASURE_TIME
 	struct timespec time_start, time_stop, time_diff, prev_start;
 #endif
@@ -2195,7 +2192,7 @@ test:
 				return NULL;
 			} else if (interrupt_ret == RENDER_CHECK_MSG_FLUSH) {
 				LOGI(2, "jni_player_render_frame flush");
-				struct VideoRGBFrameElem *elem;
+				VideoRGBFrameElem *elem;
 				while ((elem = queue_pop_start_impl_non_block(
 						player->rgb_video_queue)) != NULL) {
 					queue_pop_finish_impl(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
@@ -2268,7 +2265,7 @@ test:
 }
 
 void jni_player_release_frame(JNIEnv *env, jobject thiz) {
-	struct Player * player = player_get_player_field(env, thiz);
+	Player * player = player_get_player_field(env, thiz);
 #ifdef MEASURE_TIME
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &render_frame_stop);
 	struct timespec diff = timespec_diff(render_frame_start, render_frame_stop);
@@ -2283,8 +2280,8 @@ void jni_player_stop(JNIEnv *env, jobject thiz) {
 	moncleanup();
 #endif
 
-	struct Player * player = player_get_player_field(env, thiz);
-	struct State state;
+	Player * player = player_get_player_field(env, thiz);
+	State state;
 
 	state.player = player;
 	state.env = env;
@@ -2294,6 +2291,6 @@ void jni_player_stop(JNIEnv *env, jobject thiz) {
 }
 
 int jni_player_get_video_duration(JNIEnv *env, jobject thiz) {
-	struct Player * player = player_get_player_field(env, thiz);
+	Player * player = player_get_player_field(env, thiz);
 	return player->video_duration;
 }
