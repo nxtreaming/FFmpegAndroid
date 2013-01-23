@@ -1,5 +1,4 @@
 /*
- * player.c
  * Copyright (c) 2012 Jacek Marchwicki
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -220,8 +219,7 @@ void throw_runtime_exception(JNIEnv *env, const char * msg) {
 	throw_exception(env, runtime_exception_class_path_name, msg);
 }
 
-QueueCheckFuncRet player_decode_queue_check(Queue *queue,
-		DecoderData *decoderData, int *ret) {
+QueueCheckFuncRet player_decode_queue_check(Queue *queue, DecoderData *decoderData, int *ret) {
 	Player *player = decoderData->player;
 	int stream_no = decoderData->stream_no;
 	if (player->stop_streams[stream_no]) {
@@ -240,8 +238,7 @@ void player_decode_audio_flush(DecoderData * decoder_data, JNIEnv * env) {
 	(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
 }
 
-int player_decode_audio(DecoderData * decoder_data, JNIEnv * env,
-		PacketData *packet_data) {
+int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
 	int got_frame_ptr;
 	Player *player = decoder_data->player;
 	int stream_no = decoder_data->stream_no;
@@ -319,8 +316,7 @@ void player_decode_video_flush(DecoderData * decoder_data, JNIEnv * env) {
 	}
 }
 
-int player_decode_video(DecoderData * decoder_data, JNIEnv * env,
-		PacketData *packet_data) {
+int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
 	int got_frame_ptr;
 	Player *player = decoder_data->player;
 	int stream_no = decoder_data->stream_no;
@@ -493,7 +489,7 @@ fail_lock_bitmap:
 	return err;
 }
 
-void * player_decode(void * data) {
+void *player_decode(void * data) {
 	int err = ERROR_NO_ERROR;
 	DecoderData *decoder_data = data;
 	Player *player = decoder_data->player;
@@ -625,8 +621,7 @@ end: free(decoder_data);
 	return NULL;
 }
 
-QueueCheckFuncRet player_read_stream_check(Queue *queue,
-		Player *player, int *ret) {
+QueueCheckFuncRet player_read_stream_check(Queue *queue, Player *player, int *ret) {
 	if (player->stop) {
 		*ret = READ_FROM_STREAM_CHECK_MSG_STOP;
 		return QUEUE_CHECK_FUNC_RET_SKIP;
@@ -638,16 +633,14 @@ QueueCheckFuncRet player_read_stream_check(Queue *queue,
 	return QUEUE_CHECK_FUNC_RET_TEST;
 }
 
-static void player_assign_to_no_boolean_array(Player *player, int* array,
-		int value) {
+static void player_assign_to_no_boolean_array(Player *player, int* array, int value) {
 	int capture_streams_no = player->caputre_streams_no;
 	int stream_no;
 	for (stream_no = 0; stream_no < capture_streams_no; ++stream_no) {
 		array[stream_no] = value;
 	}
 }
-static int player_if_all_no_array_elements_has_value(Player *player,
-		int *array, int value) {
+static int player_if_all_no_array_elements_has_value(Player *player, int *array, int value) {
 	int capture_streams_no = player->caputre_streams_no;
 	int stream_no;
 	for (stream_no = 0; stream_no < capture_streams_no; ++stream_no) {
@@ -672,8 +665,7 @@ void * player_read_stream(void *data) {
 	int interrupt_ret;
 	JavaVMAttachArgs thread_spec = { JNI_VERSION_1_4, "FFmpegReadFromStream", NULL };
 
-	jint ret = (*player->get_javavm)->AttachCurrentThread(player->get_javavm,
-			&env, &thread_spec);
+	jint ret = (*player->get_javavm)->AttachCurrentThread(player->get_javavm, &env, &thread_spec);
 	if (ret) {
 		err = ERROR_COULD_NOT_ATTACH_THREAD;
 		goto end;
@@ -921,15 +913,14 @@ end:
 }
 
 Player * player_get_player_field(JNIEnv *env, jobject thiz) {
-
 	jfieldID m_native_layer_field = java_get_field(env, player_class_path_name,
 			player_m_native_player);
-	Player * player = (Player *) (*env)->GetIntField(env, thiz,
+	Player *player = (Player *) (*env)->GetIntField(env, thiz,
 			m_native_layer_field);
 	return player;
 }
 
-void *player_fill_packet(State *state) {
+void * player_fill_packet(State *state) {
 	PacketData *packet_data = malloc(sizeof(PacketData));
 	if (packet_data == NULL) {
 		return NULL;
@@ -947,8 +938,7 @@ void player_free_packet(State *player, PacketData *elem) {
 	free(elem);
 }
 
-void player_free_video_rgb_frame(State *state,
-		VideoRGBFrameElem *elem) {
+void player_free_video_rgb_frame(State *state, VideoRGBFrameElem *elem) {
 	JNIEnv *env = state->env;
 	jobject thiz = state->thiz;
 
@@ -1090,8 +1080,7 @@ void player_find_streams_free(Player *player) {
 	player->audio_stream_no = -1;
 }
 
-int player_try_open_stream(Player *player, enum AVMediaType codec_type,
-		int stream_no) {
+int player_try_open_stream(Player *player, enum AVMediaType codec_type, int stream_no) {
 	if (stream_no < 0)
 		return -1;
 	if (stream_no >= player->input_format_ctx->nb_streams)
@@ -1109,8 +1098,7 @@ int player_try_open_stream(Player *player, enum AVMediaType codec_type,
 	return stream_no;
 }
 
-int player_find_stream(Player *player, enum AVMediaType codec_type,
-		int recommended_stream_no) {
+int player_find_stream(Player *player, enum AVMediaType codec_type, int recommended_stream_no) {
 	int streams_no = player->caputre_streams_no;
 	int err = ERROR_NO_ERROR;
 	LOGI(3, "player_find_stream, type: %d", codec_type);
@@ -1153,15 +1141,13 @@ uint64_t player_find_layout_from_channels(int nb_channels) {
 	return (uint64_t) 0;
 }
 
-void player_print_report_video_streams_free(JNIEnv* env, jobject thiz,
-		Player *player) {
+void player_print_report_video_streams_free(JNIEnv* env, jobject thiz, Player *player) {
 	if (player->player_set_stream_info != NULL)
 		(*env)->CallVoidMethod(env, thiz, player->player_set_stream_info,
 				NULL);
 }
 
-int player_print_report_video_streams(JNIEnv* env, jobject thiz,
-		Player *player) {
+int player_print_report_video_streams(JNIEnv* env, jobject thiz, Player *player) {
 	int i;
 	int err = ERROR_NO_ERROR;
 	jclass stream_info_class = (*env)->FindClass(env,
@@ -1578,8 +1564,7 @@ void player_open_input_free(Player *player) {
 	}
 }
 
-int player_open_input(Player *player, const char *file_path,
-		AVDictionary *dictionary) {
+int player_open_input(Player *player, const char *file_path, AVDictionary *dictionary) {
 	int ret;
 	if ((ret = avformat_open_input(&(player->input_format_ctx), file_path, NULL,
 			&dictionary)) < 0) {
@@ -1775,7 +1760,7 @@ end:
 }
 
 void jni_player_pause(JNIEnv *env, jobject thiz) {
-	Player * player = player_get_player_field(env, thiz);
+	Player *player = player_get_player_field(env, thiz);
 
 	pthread_mutex_lock(&player->mutex_operation);
 
@@ -1806,7 +1791,7 @@ end:
 }
 
 void jni_player_resume(JNIEnv *env, jobject thiz) {
-	Player * player = player_get_player_field(env, thiz);
+	Player *player = player_get_player_field(env, thiz);
 	pthread_mutex_lock(&player->mutex_operation);
 
 	if (!player->playing) {
@@ -1839,8 +1824,7 @@ end:
 	pthread_mutex_unlock(&player->mutex_operation);
 }
 
-void jni_player_read_dictionary(JNIEnv *env, AVDictionary **dictionary,
-		jobject jdictionary) {
+void jni_player_read_dictionary(JNIEnv *env, AVDictionary **dictionary, jobject jdictionary) {
 	jclass map_class = (*env)->FindClass(env, map_class_path_name);
 	jclass set_class = (*env)->FindClass(env, set_class_path_name);
 	jclass iterator_class = (*env)->FindClass(env, iterator_class_path_name);
@@ -1898,7 +1882,7 @@ int jni_player_set_data_source(JNIEnv *env, jobject thiz, jstring string,
 	}
 
 	const char *file_path = (*env)->GetStringUTFChars(env, string, NULL);
-	Player * player = player_get_player_field(env, thiz);
+	Player *player = player_get_player_field(env, thiz);
 	State state = { player, env, thiz };
 
 	int ret = player_set_data_source(&state, file_path, dict, video_stream_no,
@@ -2074,8 +2058,7 @@ end:
 	return err;
 }
 
-QueueCheckFuncRet player_render_frame_check(Queue *queue,
-		Player *player, int *check_ret_data) {
+QueueCheckFuncRet player_render_frame_check(Queue *queue, Player *player, int *check_ret_data) {
 	if (player->interrupt_renderer) {
 		*check_ret_data = RENDER_CHECK_MSG_INTERRUPT;
 		LOGI(6, "player_render_frame_check: interrupt_renderer")
@@ -2102,7 +2085,7 @@ QueueCheckFuncRet player_render_frame_check(Queue *queue,
 }
 
 void jni_player_render_frame_start(JNIEnv *env, jobject thiz) {
-	Player * player = player_get_player_field(env, thiz);
+	Player *player = player_get_player_field(env, thiz);
 	pthread_mutex_lock(&player->mutex_queue);
 	assert(!player->rendering);
 	player->rendering = TRUE;
@@ -2112,7 +2095,7 @@ void jni_player_render_frame_start(JNIEnv *env, jobject thiz) {
 }
 
 void jni_player_render_frame_stop(JNIEnv *env, jobject thiz) {
-	Player * player = player_get_player_field(env, thiz);
+	Player *player = player_get_player_field(env, thiz);
 	pthread_mutex_lock(&player->mutex_queue);
 	assert(player->rendering);
 	player->rendering = FALSE;
@@ -2122,7 +2105,7 @@ void jni_player_render_frame_stop(JNIEnv *env, jobject thiz) {
 }
 
 jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
-	Player * player = player_get_player_field(env, thiz);
+	Player *player = player_get_player_field(env, thiz);
 	State state = { player, env, thiz };
 	int interrupt_ret;
 	VideoRGBFrameElem *elem;
@@ -2265,7 +2248,7 @@ test:
 }
 
 void jni_player_release_frame(JNIEnv *env, jobject thiz) {
-	Player * player = player_get_player_field(env, thiz);
+	Player *player = player_get_player_field(env, thiz);
 #ifdef MEASURE_TIME
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &render_frame_stop);
 	struct timespec diff = timespec_diff(render_frame_start, render_frame_stop);
@@ -2280,7 +2263,7 @@ void jni_player_stop(JNIEnv *env, jobject thiz) {
 	moncleanup();
 #endif
 
-	Player * player = player_get_player_field(env, thiz);
+	Player *player = player_get_player_field(env, thiz);
 	State state;
 
 	state.player = player;
@@ -2291,6 +2274,6 @@ void jni_player_stop(JNIEnv *env, jobject thiz) {
 }
 
 int jni_player_get_video_duration(JNIEnv *env, jobject thiz) {
-	Player * player = player_get_player_field(env, thiz);
+	Player *player = player_get_player_field(env, thiz);
 	return player->video_duration;
 }
