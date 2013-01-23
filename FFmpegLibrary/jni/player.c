@@ -161,10 +161,10 @@ struct Player {
 
 	int rendering;
 
-	pthread_t thread_player_read_from_stream;
+	pthread_t thread_player_read_stream;
 	pthread_t decode_threads[MAX_STREAMS];
 
-	int thread_player_read_from_stream_created;
+	int thread_player_read_stream_created;
 	int decode_threads_created[MAX_STREAMS];
 
 	double audio_clock;
@@ -628,7 +628,7 @@ end: free(decoder_data);
 	return NULL;
 }
 
-QueueCheckFuncRet player_read_from_stream_check_func(Queue *queue,
+QueueCheckFuncRet player_read_stream_check_func(Queue *queue,
 		struct Player *player, int *ret) {
 	if (player->stop) {
 		*ret = READ_FROM_STREAM_CHECK_MSG_STOP;
@@ -660,7 +660,7 @@ static int player_if_all_no_array_elements_has_value(struct Player *player,
 	return TRUE;
 }
 
-void * player_read_from_stream(void *data) {
+void * player_read_stream(void *data) {
 	struct Player *player = (struct Player *) data;
 	int err = ERROR_NO_ERROR;
 
@@ -689,25 +689,25 @@ void * player_read_from_stream(void *data) {
 		int ret = av_read_frame(player->input_format_ctx, pkt);
 		if (ret < 0) {
 			pthread_mutex_lock(&player->mutex_queue);
-			LOGI(3, "player_read_from_stream stream end");
+			LOGI(3, "player_read_stream stream end");
 			queue = player->packets_queue[player->video_stream_no];
 			packet_data = queue_push_start_impl(queue,
 				&player->mutex_queue, &player->cond_queue, &to_write,
-				(QueueCheckFunc) player_read_from_stream_check_func, player,
+				(QueueCheckFunc) player_read_stream_check_func, player,
 				(void **) &interrupt_ret);
 			if (packet_data == NULL) {
 				if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_STOP) {
-					LOGI(2, "player_read_from_stream queue interrupt stop");
+					LOGI(2, "player_read_stream queue interrupt stop");
 					goto exit_loop;
 				} else if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_SEEK) {
-					LOGI(2, "player_read_from_stream queue interrupt seek");
+					LOGI(2, "player_read_stream queue interrupt seek");
 					goto seek_loop;
 				} else {
 					assert(FALSE);
 				}
 			}
 			packet_data->end_of_stream = 1;
-			LOGI(3, "player_read_from_stream sending end_of_stream packet");
+			LOGI(3, "player_read_stream sending end_of_stream packet");
 			queue_push_finish_impl(queue, &player->mutex_queue, &player->cond_queue, to_write);
 
 			for (;;) {
@@ -720,10 +720,10 @@ void * player_read_from_stream(void *data) {
 			pthread_mutex_unlock(&player->mutex_queue);
 		}
 
-		LOGI(8, "player_read_from_stream Read frame");
+		LOGI(8, "player_read_stream Read frame");
 		pthread_mutex_lock(&player->mutex_queue);
 		if (player->stop) {
-			LOGI(4, "player_read_from_stream stopping");
+			LOGI(4, "player_read_stream stopping");
 			goto exit_loop;
 		}
 		if (player->seek_position != DO_NOT_SEEK) {
@@ -734,31 +734,31 @@ void * player_read_from_stream(void *data) {
 
 parse_frame:
 		queue = NULL;
-		LOGI(3, "player_read_from_stream looking for stream")
+		LOGI(3, "player_read_stream looking for stream")
 		for (stream_no = 0; stream_no < caputre_streams_no; ++stream_no) {
 			if (packet.stream_index
 					== player->input_stream_numbers[stream_no]) {
 				queue = player->packets_queue[stream_no];
-				LOGI(3, "player_read_from_stream stream found [%d]", stream_no);
+				LOGI(3, "player_read_stream stream found [%d]", stream_no);
 			}
 		}
 
 		if (queue == NULL) {
-			LOGI(3, "player_read_from_stream stream not found");
+			LOGI(3, "player_read_stream stream not found");
 			goto skip_loop;
 		}
 
 push_start:
-		LOGI(10, "player_read_from_stream waiting for queue");
+		LOGI(10, "player_read_stream waiting for queue");
 		packet_data = queue_push_start_impl(queue,
 			&player->mutex_queue, &player->cond_queue, &to_write,
-			(QueueCheckFunc) player_read_from_stream_check_func, player,
+			(QueueCheckFunc) player_read_stream_check_func, player,
 			(void **) &interrupt_ret);
 		if (packet_data == NULL) {
 			if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_STOP) {
-				LOGI(2, "player_read_from_stream queue interrupt stop");
+				LOGI(2, "player_read_stream queue interrupt stop");
 			} else if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_SEEK) {
-				LOGI(2, "player_read_from_stream queue interrupt seek");
+				LOGI(2, "player_read_stream queue interrupt seek");
 			} else {
 				assert(FALSE);
 			}
@@ -779,7 +779,7 @@ push_start:
 		continue;
 
 exit_loop:
-		LOGI(3, "player_read_from_stream stop");
+		LOGI(3, "player_read_stream stop");
 		av_free_packet(pkt);
 
 		//request stream to stop
@@ -807,7 +807,7 @@ seek_loop:
 		// getting seek target time in time_base value
 		seek_target = av_rescale_q(AV_TIME_BASE * (int64_t) player->seek_position, AV_TIME_BASE_Q,
 			seek_input_stream->time_base);
-		LOGI(3, "player_read_from_stream seeking to: "
+		LOGI(3, "player_read_stream seeking to: "
 		"%ds, time_base: %d", player->seek_position, seek_target);
 
 		// seeking
@@ -819,25 +819,25 @@ seek_loop:
 			goto parse_frame;
 		}
 
-		LOGI(3, "player_read_from_stream seeking success");
+		LOGI(3, "player_read_stream seeking success");
 
 		// request stream to flush
 		player_assign_to_no_boolean_array(player, player->flush_streams, TRUE);
-		LOGI(3, "player_read_from_stream flushing audio")
+		LOGI(3, "player_read_stream flushing audio")
 		// flush audio buffer
 		(*env)->CallVoidMethod(env, player->audio_track,
 				player->audio_track_flush);
-		LOGI(3, "player_read_from_stream flushed audio");
+		LOGI(3, "player_read_stream flushed audio");
 		pthread_cond_broadcast(&player->cond_queue);
 
-		LOGI(3, "player_read_from_stream waiting for flush");
+		LOGI(3, "player_read_stream waiting for flush");
 
 		// waiting for all stream flush
 		while (!player_if_all_no_array_elements_has_value(player,
 				player->flush_streams, FALSE))
 			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 
-		LOGI(3, "player_read_from_stream flushing internal codec bffers");
+		LOGI(3, "player_read_stream flushing internal codec bffers");
 		// flush internal buffers
 		for (stream_no = 0; stream_no < caputre_streams_no; ++stream_no) {
 			avcodec_flush_buffers(player->input_codec_ctxs[stream_no]);
@@ -846,7 +846,7 @@ seek_loop:
 		// finishing seeking
 		player->seek_position = DO_NOT_SEEK;
 		pthread_cond_broadcast(&player->cond_queue);
-		LOGI(3, "player_read_from_stream ending seek");
+		LOGI(3, "player_read_stream ending seek");
 
 skip_loop:
 		av_free_packet(pkt);
@@ -1515,13 +1515,13 @@ int player_start_decoding_threads(struct Player *player) {
 		player->decode_threads_created[i] = TRUE;
 	}
 
-	ret = pthread_create(&player->thread_player_read_from_stream, &attr,
-			player_read_from_stream, player);
+	ret = pthread_create(&player->thread_player_read_stream, &attr,
+			player_read_stream, player);
 	if (ret) {
 		err = -ERROR_COULD_NOT_CREATE_PTHREAD;
 		goto end;
 	}
-	player->thread_player_read_from_stream_created = TRUE;
+	player->thread_player_read_stream_created = TRUE;
 
 end:
 	ret = pthread_attr_destroy(&attr);
@@ -1537,9 +1537,9 @@ int player_start_decoding_threads_free(struct Player *player) {
 	int err = 0;
 	int ret;
 	int i;
-	if (player->thread_player_read_from_stream_created) {
-		ret = pthread_join(player->thread_player_read_from_stream, NULL);
-		player->thread_player_read_from_stream_created = FALSE;
+	if (player->thread_player_read_stream_created) {
+		ret = pthread_join(player->thread_player_read_stream, NULL);
+		player->thread_player_read_stream_created = FALSE;
 		if (ret) {
 			err = ERROR_COULD_NOT_JOIN_PTHREAD;
 		}
