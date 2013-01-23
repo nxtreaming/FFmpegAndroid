@@ -220,7 +220,7 @@ void throw_runtime_exception(JNIEnv *env, const char * msg) {
 	throw_exception(env, runtime_exception_class_path_name, msg);
 }
 
-QueueCheckFuncRet player_decode_queue_check_func(Queue *queue,
+QueueCheckFuncRet player_decode_queue_check(Queue *queue,
 		struct DecoderData *decoderData, int *ret) {
 	struct Player *player = decoderData->player;
 	int stream_no = decoderData->stream_no;
@@ -340,7 +340,7 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 		pthread_mutex_lock(&player->mutex_queue);
 		elem = queue_push_start_impl(player->rgb_video_queue,
 			&player->mutex_queue, &player->cond_queue, &to_write,
-			(QueueCheckFunc) player_decode_queue_check_func, decoder_data,
+			(QueueCheckFunc) player_decode_queue_check, decoder_data,
 			(void **) &interrupt_ret);
 		if (elem == NULL) {
 			if (interrupt_ret == DECODE_CHECK_MSG_STOP) {
@@ -404,7 +404,7 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 	pthread_mutex_lock(&player->mutex_queue);
 	elem = queue_push_start_impl(player->rgb_video_queue,
 		&player->mutex_queue, &player->cond_queue, &to_write,
-		(QueueCheckFunc) player_decode_queue_check_func, decoder_data,
+		(QueueCheckFunc) player_decode_queue_check, decoder_data,
 		(void **) &interrupt_ret);
 	if (elem == NULL) {
 		if (interrupt_ret == DECODE_CHECK_MSG_STOP) {
@@ -528,7 +528,7 @@ pop:
 		}
 		packet_data = queue_pop_start_impl(&queue,
 			&player->mutex_queue, &player->cond_queue,
-			(QueueCheckFunc) player_decode_queue_check_func, decoder_data,
+			(QueueCheckFunc) player_decode_queue_check, decoder_data,
 			(void **) &interrupt_ret);
 		if (packet_data == NULL) {
 			if (interrupt_ret == DECODE_CHECK_MSG_FLUSH) {
@@ -628,7 +628,7 @@ end: free(decoder_data);
 	return NULL;
 }
 
-QueueCheckFuncRet player_read_stream_check_func(Queue *queue,
+QueueCheckFuncRet player_read_stream_check(Queue *queue,
 		struct Player *player, int *ret) {
 	if (player->stop) {
 		*ret = READ_FROM_STREAM_CHECK_MSG_STOP;
@@ -693,7 +693,7 @@ void * player_read_stream(void *data) {
 			queue = player->packets_queue[player->video_stream_no];
 			packet_data = queue_push_start_impl(queue,
 				&player->mutex_queue, &player->cond_queue, &to_write,
-				(QueueCheckFunc) player_read_stream_check_func, player,
+				(QueueCheckFunc) player_read_stream_check, player,
 				(void **) &interrupt_ret);
 			if (packet_data == NULL) {
 				if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_STOP) {
@@ -752,7 +752,7 @@ push_start:
 		LOGI(10, "player_read_stream waiting for queue");
 		packet_data = queue_push_start_impl(queue,
 			&player->mutex_queue, &player->cond_queue, &to_write,
-			(QueueCheckFunc) player_read_stream_check_func, player,
+			(QueueCheckFunc) player_read_stream_check, player,
 			(void **) &interrupt_ret);
 		if (packet_data == NULL) {
 			if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_STOP) {
@@ -2077,30 +2077,30 @@ end:
 	return err;
 }
 
-QueueCheckFuncRet player_render_frame_check_func(Queue *queue,
+QueueCheckFuncRet player_render_frame_check(Queue *queue,
 		struct Player *player, int *check_ret_data) {
 	if (player->interrupt_renderer) {
 		*check_ret_data = RENDER_CHECK_MSG_INTERRUPT;
-		LOGI(6, "player_render_frame_check_func: interrupt_renderer")
+		LOGI(6, "player_render_frame_check: interrupt_renderer")
 		return QUEUE_CHECK_FUNC_RET_SKIP;
 	}
 	if (player->flush_video_play) {
-		LOGI(6, "player_render_frame_check_func: flush_video_play");
+		LOGI(6, "player_render_frame_check: flush_video_play");
 		*check_ret_data = RENDER_CHECK_MSG_FLUSH;
 		return QUEUE_CHECK_FUNC_RET_SKIP;
 	}
 	if (player->pause) {
-		LOGI(6, "player_render_frame_check_func: pause")
+		LOGI(6, "player_render_frame_check: pause")
 
 		return QUEUE_CHECK_FUNC_RET_WAIT;
 	}
 	if (player->stop) {
-		LOGI(6, "player_render_frame_check_func: stop")
+		LOGI(6, "player_render_frame_check: stop")
 
 		return QUEUE_CHECK_FUNC_RET_WAIT;
 	}
 
-	LOGI(9, "player_render_frame_check_func: test")
+	LOGI(9, "player_render_frame_check: test")
 	return QUEUE_CHECK_FUNC_RET_TEST;
 }
 
@@ -2144,7 +2144,7 @@ pop:
 	LOGI(4, "jni_player_render_frame reading from queue");
 	elem = queue_pop_start_impl(&player->rgb_video_queue,
 			&player->mutex_queue, &player->cond_queue,
-			(QueueCheckFunc) player_render_frame_check_func, player,
+			(QueueCheckFunc) player_render_frame_check, player,
 			&interrupt_ret);
 #ifdef MEASURE_TIME
 	if (elem != NULL) {
@@ -2168,7 +2168,7 @@ pop:
 			}
 			QueueCheckFuncRet ret;
 test:
-			ret = player_render_frame_check_func(player->rgb_video_queue,
+			ret = player_render_frame_check(player->rgb_video_queue,
 					player, &interrupt_ret);
 			switch (ret) {
 			case QUEUE_CHECK_FUNC_RET_WAIT:
@@ -2191,9 +2191,7 @@ test:
 			if (interrupt_ret == RENDER_CHECK_MSG_INTERRUPT) {
 				LOGI(2, "jni_player_render_frame interrupted");
 				pthread_mutex_unlock(&player->mutex_queue);
-
-				throw_interrupted_exception(env,
-						"Render frame was interrupted by user");
+				throw_interrupted_exception(env, "Render frame was interrupted by user");
 				return NULL;
 			} else if (interrupt_ret == RENDER_CHECK_MSG_FLUSH) {
 				LOGI(2, "jni_player_render_frame flush");
