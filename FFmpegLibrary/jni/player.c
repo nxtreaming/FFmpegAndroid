@@ -93,17 +93,16 @@ typedef struct Player {
 
 	pthread_mutex_t mutex_operation;
 
-	int caputre_streams_no;
+	AVFormatContext *format_ctx;
+	int input_inited;
 
+	int caputre_streams_no;
 	int video_stream_no;
 	int audio_stream_no;
 	AVStream *input_streams[MAX_STREAMS];
 	AVCodecContext * input_codec_ctxs[MAX_STREAMS];
 	int input_stream_numbers[MAX_STREAMS];
 	AVFrame *input_frames[MAX_STREAMS];
-
-	AVFormatContext *input_format_ctx;
-	int input_inited;
 
 	enum PixelFormat out_format;
 
@@ -675,7 +674,7 @@ void * player_read_stream(void *data) {
 		//while (player->pause) {
 		//	pthread_cond_timeout_np(&player->cond_queue, &player->mutex_queue, 10);
 		//}
-		int ret = av_read_frame(player->input_format_ctx, pkt);
+		int ret = av_read_frame(player->format_ctx, pkt);
 		if (ret < 0) {
 			pthread_mutex_lock(&player->mutex_queue);
 			LOGI(3, "player_read_stream stream end");
@@ -800,7 +799,7 @@ seek_loop:
 		"%ds, time_base: %d", player->seek_position, seek_target);
 
 		// seeking
-		if (av_seek_frame(player->input_format_ctx, seek_input_stream_number, seek_target, 0) < 0) {
+		if (av_seek_frame(player->format_ctx, seek_input_stream_number, seek_target, 0) < 0) {
 			// seeking error - trying to play movie without it
 			LOGE(1, "Error while seeking");
 			player->seek_position = DO_NOT_SEEK;
@@ -1083,10 +1082,10 @@ void player_find_streams_free(Player *player) {
 int player_try_open_stream(Player *player, enum AVMediaType codec_type, int stream_no) {
 	if (stream_no < 0)
 		return -1;
-	if (stream_no >= player->input_format_ctx->nb_streams)
+	if (stream_no >= player->format_ctx->nb_streams)
 		return -1;
 
-	AVStream *stream = player->input_format_ctx->streams[stream_no];
+	AVStream *stream = player->format_ctx->streams[stream_no];
 	AVCodecContext *ctx = stream->codec;
 	if (ctx->codec_type != codec_type) {
 		return -1;
@@ -1107,7 +1106,7 @@ int player_find_stream(Player *player, enum AVMediaType codec_type, int recommen
 			recommended_stream_no);
 	if (bn_stream < 0) {
 		int i;
-		for (i = 0; i < player->input_format_ctx->nb_streams; i++) {
+		for (i = 0; i < player->format_ctx->nb_streams; i++) {
 			bn_stream = player_try_open_stream(player, codec_type, i);
 			if (bn_stream >= 0)
 				break;
@@ -1118,7 +1117,7 @@ int player_find_stream(Player *player, enum AVMediaType codec_type, int recommen
 		return -1;
 	}
 
-	AVStream *stream = player->input_format_ctx->streams[bn_stream];
+	AVStream *stream = player->format_ctx->streams[bn_stream];
 	player->input_streams[streams_no] = stream;
 	player->input_codec_ctxs[streams_no] = stream->codec;
 	player->input_stream_numbers[streams_no] = bn_stream;
@@ -1169,15 +1168,15 @@ int player_print_report_video_streams(JNIEnv* env, jobject thiz, Player *player)
 	jmethodID map_put_method = java_get_method(env, map_class, map_put);
 
 	jobjectArray array = (*env)->NewObjectArray(env,
-			player->input_format_ctx->nb_streams, stream_info_class, NULL);
+			player->format_ctx->nb_streams, stream_info_class, NULL);
 	if (array == NULL) {
 		err = -ERROR_COULD_NOT_ALLOCATE_MEMORY;
 		goto free_map_class;
 	}
 	for (i = 0;
-			i < player->input_format_ctx->nb_streams && err == ERROR_NO_ERROR;
+			i < player->format_ctx->nb_streams && err == ERROR_NO_ERROR;
 			i++) {
-		AVStream *stream = player->input_format_ctx->streams[i];
+		AVStream *stream = player->format_ctx->streams[i];
 		AVCodecContext *codec = stream->codec;
 		AVDictionary *metadaat = stream->metadata;
 		AVDictionaryEntry *tag = NULL;
@@ -1456,16 +1455,16 @@ void player_get_video_duration(Player *player) {
 			return;
 		}
 	}
-	if (player->input_format_ctx->duration != 0) {
+	if (player->format_ctx->duration != 0) {
 		player->video_duration = round(
-				player->input_format_ctx->duration * av_q2d(AV_TIME_BASE_Q));
+				player->format_ctx->duration * av_q2d(AV_TIME_BASE_Q));
 		LOGI(3,
-				"player_set_data_source video duration: %ld", player->input_format_ctx->duration)
+				"player_set_data_source video duration: %ld", player->format_ctx->duration)
 		return;
 	}
 
-	for (i = 0; i < player->input_format_ctx->nb_streams; i++) {
-		AVStream *stream = player->input_format_ctx->streams[i];
+	for (i = 0; i < player->format_ctx->nb_streams; i++) {
+		AVStream *stream = player->format_ctx->streams[i];
 		if (stream->duration > 0) {
 			player->video_duration = round(
 					stream->duration * av_q2d(stream->time_base));
@@ -1541,15 +1540,15 @@ int player_start_decoding_threads_free(Player *player) {
 }
 
 void player_create_context_free(Player *player) {
-	if (player->input_format_ctx != NULL) {
+	if (player->format_ctx != NULL) {
 		LOGI(7, "player_set_data_source remove_context");
-		av_freep(&player->input_format_ctx);
+		av_freep(&player->format_ctx);
 	}
 }
 
 int player_create_context(Player *player) {
-	player->input_format_ctx = avformat_alloc_context();
-	if (player->input_format_ctx == NULL) {
+	player->format_ctx = avformat_alloc_context();
+	if (player->format_ctx == NULL) {
 		LOGE(1, "Could not create AVContext\n");
 		return -ERROR_COULD_NOT_CREATE_AVCONTEXT;
 	}
@@ -1559,14 +1558,14 @@ int player_create_context(Player *player) {
 void player_open_input_free(Player *player) {
 	if (player->input_inited) {
 		LOGI(7, "player_set_data_source close_file");
-		avformat_close_input(&(player->input_format_ctx));
+		avformat_close_input(&(player->format_ctx));
 		player->input_inited = FALSE;
 	}
 }
 
 int player_open_input(Player *player, const char *file_path, AVDictionary *dictionary) {
 	int ret;
-	if ((ret = avformat_open_input(&(player->input_format_ctx), file_path, NULL,
+	if ((ret = avformat_open_input(&(player->format_ctx), file_path, NULL,
 			&dictionary)) < 0) {
 		char errbuf[128];
 		const char *errbuf_ptr = errbuf;
@@ -1584,7 +1583,7 @@ int player_open_input(Player *player, const char *file_path, AVDictionary *dicti
 }
 
 int player_find_stream_info(Player *player) {
-	if (avformat_find_stream_info(player->input_format_ctx, NULL) < 0) {
+	if (avformat_find_stream_info(player->format_ctx, NULL) < 0) {
 		LOGE(1, "Could not open stream\n");
 		return -ERROR_COULD_NOT_OPEN_STREAM;
 	}
