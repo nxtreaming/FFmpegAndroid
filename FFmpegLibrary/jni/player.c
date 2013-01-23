@@ -79,12 +79,6 @@ struct VideoRGBFrameElem {
 	int end_of_stream;
 };
 
-struct SubtitleElem {
-	AVSubtitle subtitle;
-	double start_time;
-	double stop_time;
-};
-
 struct PacketData {
 	int end_of_stream;
 	AVPacket *packet;
@@ -367,7 +361,6 @@ int player_decode_video(struct DecoderData * decoder_data, JNIEnv * env,
 		return 0;
 	}
 
-
 	LOGI(10, "player_decode_video decoding");
 	int frameFinished;
 
@@ -583,8 +576,7 @@ pop:
 			pthread_mutex_lock(&player->mutex_queue);
 			goto stop;
 		}
-
-		goto end_loop;
+		continue;
 
 stop:
 		LOGI(2, "player_decode stop[%d]", stream_no);
@@ -621,7 +613,6 @@ flush:
 			pthread_cond_broadcast(&player->cond_queue);
 			goto pop;
 		}
-end_loop: continue;
 	}
 
 detach_current_thread:
@@ -682,8 +673,7 @@ void * player_read_from_stream(void *data) {
 	struct PacketData *packet_data;
 	int to_write;
 	int interrupt_ret;
-	JavaVMAttachArgs thread_spec = { JNI_VERSION_1_4, "FFmpegReadFromStream",
-			NULL };
+	JavaVMAttachArgs thread_spec = { JNI_VERSION_1_4, "FFmpegReadFromStream", NULL };
 
 	jint ret = (*player->get_javavm)->AttachCurrentThread(player->get_javavm,
 			&env, &thread_spec);
@@ -786,8 +776,7 @@ push_start:
 		}
 
 		queue_push_finish(queue, &player->mutex_queue, &player->cond_queue, to_write);
-
-		goto end_loop;
+		continue;
 
 exit_loop:
 		LOGI(3, "player_read_from_stream stop");
@@ -816,15 +805,13 @@ seek_loop:
 		seek_input_stream = player->input_streams[player->video_stream_no];
 
 		// getting seek target time in time_base value
-		seek_target = av_rescale_q(
-				AV_TIME_BASE * (int64_t) player->seek_position, AV_TIME_BASE_Q,
-				seek_input_stream->time_base);
+		seek_target = av_rescale_q(AV_TIME_BASE * (int64_t) player->seek_position, AV_TIME_BASE_Q,
+			seek_input_stream->time_base);
 		LOGI(3, "player_read_from_stream seeking to: "
 		"%ds, time_base: %d", player->seek_position, seek_target);
 
 		// seeking
-		if (av_seek_frame(player->input_format_ctx, seek_input_stream_number,
-				seek_target, 0) < 0) {
+		if (av_seek_frame(player->input_format_ctx, seek_input_stream_number, seek_target, 0) < 0) {
 			// seeking error - trying to play movie without it
 			LOGE(1, "Error while seeking");
 			player->seek_position = DO_NOT_SEEK;
@@ -864,8 +851,6 @@ seek_loop:
 skip_loop:
 		av_free_packet(pkt);
 		pthread_mutex_unlock(&player->mutex_queue);
-end_loop:
-		continue;
 	}
 
 detach_current_thread:
