@@ -22,13 +22,15 @@ if [ "$NDK" = "" ]; then
 fi
 
 OS=`uname -s | tr '[A-Z]' '[a-z]'`
+
+#CFLAGS="-I$ARM_INC -fpic -DANDROID -fpic -mthumb-interwork -ffunction-sections -funwind-tables -fstack-protector -fno-short-enums -D__ARM_ARCH_5__ -D__ARM_ARCH_5T__ -D__ARM_ARCH_5E__ -D__ARM_ARCH_5TE__  -Wno-psabi -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer -fno-strict-aliasing -finline-limit=64 -DANDROID  -Wa,--noexecstack -MMD -MP "
+
 function build_x264
 {
 	PLATFORM=$NDK/platforms/$PLATFORM_VERSION/arch-$ARCH
 	export PATH=${PATH}:$PREBUILT/bin/
 	CROSS_COMPILE=$PREBUILT/bin/$EABIARCH-
 	CFLAGS=$OPTIMIZE_CFLAGS
-#CFLAGS=" -I$ARM_INC -fpic -DANDROID -fpic -mthumb-interwork -ffunction-sections -funwind-tables -fstack-protector -fno-short-enums -D__ARM_ARCH_5__ -D__ARM_ARCH_5T__ -D__ARM_ARCH_5E__ -D__ARM_ARCH_5TE__  -Wno-psabi -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer -fno-strict-aliasing -finline-limit=64 -DANDROID  -Wa,--noexecstack -MMD -MP "
 	export CPPFLAGS="$CFLAGS"
 	export CFLAGS="$CFLAGS"
 	export CXXFLAGS="$CFLAGS"
@@ -55,7 +57,6 @@ function build_amr
 	export PATH=${PATH}:$PREBUILT/bin/
 	CROSS_COMPILE=$PREBUILT/bin/$EABIARCH-
 	CFLAGS=$OPTIMIZE_CFLAGS
-#CFLAGS=" -I$ARM_INC -fpic -DANDROID -fpic -mthumb-interwork -ffunction-sections -funwind-tables -fstack-protector -fno-short-enums -D__ARM_ARCH_5__ -D__ARM_ARCH_5T__ -D__ARM_ARCH_5E__ -D__ARM_ARCH_5TE__  -Wno-psabi -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer -fno-strict-aliasing -finline-limit=64 -DANDROID  -Wa,--noexecstack -MMD -MP "
 	export CPPFLAGS="$CFLAGS"
 	export CFLAGS="$CFLAGS"
 	export CXXFLAGS="$CFLAGS"
@@ -89,7 +90,6 @@ function build_aac
 	export PATH=${PATH}:$PREBUILT/bin/
 	CROSS_COMPILE=$PREBUILT/bin/$EABIARCH-
 	CFLAGS=$OPTIMIZE_CFLAGS
-#CFLAGS=" -I$ARM_INC -fpic -DANDROID -fpic -mthumb-interwork -ffunction-sections -funwind-tables -fstack-protector -fno-short-enums -D__ARM_ARCH_5__ -D__ARM_ARCH_5T__ -D__ARM_ARCH_5E__ -D__ARM_ARCH_5TE__  -Wno-psabi -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer -fno-strict-aliasing -finline-limit=64 -DANDROID  -Wa,--noexecstack -MMD -MP "
 	export CPPFLAGS="$CFLAGS"
 	export CFLAGS="$CFLAGS"
 	export CXXFLAGS="$CFLAGS"
@@ -118,13 +118,13 @@ function build_aac
 	make -j4 install || exit 1
 	cd ..
 }
+
 function build_freetype2
 {
 	PLATFORM=$NDK/platforms/$PLATFORM_VERSION/arch-$ARCH
 	export PATH=${PATH}:$PREBUILT/bin/
 	CROSS_COMPILE=$PREBUILT/bin/$EABIARCH-
 	CFLAGS=$OPTIMIZE_CFLAGS
-#CFLAGS=" -I$ARM_INC -fpic -DANDROID -fpic -mthumb-interwork -ffunction-sections -funwind-tables -fstack-protector -fno-short-enums -D__ARM_ARCH_5__ -D__ARM_ARCH_5T__ -D__ARM_ARCH_5E__ -D__ARM_ARCH_5TE__  -Wno-psabi -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer -fno-strict-aliasing -finline-limit=64 -DANDROID  -Wa,--noexecstack -MMD -MP "
 	export CPPFLAGS="$CFLAGS"
 	export CFLAGS="$CFLAGS"
 	export CXXFLAGS="$CFLAGS"
@@ -153,13 +153,13 @@ function build_freetype2
 	make -j4 install || exit 1
 	cd ..
 }
+
 function build_ass
 {
 	PLATFORM=$NDK/platforms/$PLATFORM_VERSION/arch-$ARCH
 	export PATH=${PATH}:$PREBUILT/bin/
 	CROSS_COMPILE=$PREBUILT/bin/$EABIARCH-
 	CFLAGS="$OPTIMIZE_CFLAGS"
-#CFLAGS=" -I$ARM_INC -fpic -DANDROID -fpic -mthumb-interwork -ffunction-sections -funwind-tables -fstack-protector -fno-short-enums -D__ARM_ARCH_5__ -D__ARM_ARCH_5T__ -D__ARM_ARCH_5E__ -D__ARM_ARCH_5TE__  -Wno-psabi -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer -fno-strict-aliasing -finline-limit=64 -DANDROID  -Wa,--noexecstack -MMD -MP "
 	export CPPFLAGS="$CFLAGS"
 	export CFLAGS="$CFLAGS"
 	export CXXFLAGS="$CFLAGS"
@@ -189,13 +189,13 @@ function build_ass
 	make V=1 -j4 install || exit 1
 	cd ..
 }
+
 function build_fribidi
 {
 	PLATFORM=$NDK/platforms/$PLATFORM_VERSION/arch-$ARCH
 	export PATH=${PATH}:$PREBUILT/bin/
 	CROSS_COMPILE=$PREBUILT/bin/$EABIARCH-
 	CFLAGS="$OPTIMIZE_CFLAGS -std=gnu99"
-#CFLAGS=" -I$ARM_INC -fpic -DANDROID -fpic -mthumb-interwork -ffunction-sections -funwind-tables -fstack-protector -fno-short-enums -D__ARM_ARCH_5__ -D__ARM_ARCH_5T__ -D__ARM_ARCH_5E__ -D__ARM_ARCH_5TE__  -Wno-psabi -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer -fno-strict-aliasing -finline-limit=64 -DANDROID  -Wa,--noexecstack -MMD -MP "
 	export CPPFLAGS="$CFLAGS"
 	export CFLAGS="$CFLAGS"
 	export CXXFLAGS="$CFLAGS"
@@ -223,6 +223,7 @@ function build_fribidi
 	make -j4 install || exit 1
 	cd ..
 }
+
 function build_ffmpeg
 {
 	PLATFORM=$NDK/platforms/$PLATFORM_VERSION/arch-$ARCH
