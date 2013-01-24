@@ -23,7 +23,7 @@
 
 #include "jni-protocol.h"
 
-static const char *jni_reader_class_name = "com/appunite/ffmpeg/JniReader";
+static const char *jni_reader_class_name = "net/uplayer/ffmpeg/JniReader";
 static JavaVM *global_jvm;
 
 static int jni_read(URLContext *h, unsigned char *buf, int size) {
