@@ -774,10 +774,10 @@ void * player_read_stream(void *data) {
 	int i, err = ERROR_NO_ERROR;
 	AVPacket packet, *pkt = &packet;
 	int64_t seek_target;
-	JNIEnv * env;
+	JNIEnv *env;
 	Queue *queue;
 	int seek_stream_index;
-	AVStream * seek_stream;
+	AVStream *seek_stream;
 	PacketData *packet_data;
 	int to_write;
 	int interrupt_ret;
@@ -1242,21 +1242,8 @@ int player_print_report_video_streams(JNIEnv* env, jobject thiz, Player *player)
 			goto loop_free_stream_info;
 		}
 
-		enum CodecType codec_type = CODEC_TYPE_UNKNOWN;
-		if (codec->codec_type == AVMEDIA_TYPE_AUDIO) {
-			codec_type = CODEC_TYPE_AUDIO;
-		} else if (codec->codec_type == AVMEDIA_TYPE_VIDEO) {
-			codec_type = CODEC_TYPE_VIDEO;
-		} else if (codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
-			codec_type = CODEC_TYPE_SUBTITLE;
-		} else if (codec->codec_type == AVMEDIA_TYPE_ATTACHMENT) {
-			codec_type = CODEC_TYPE_ATTACHMENT;
-		} else if (codec->codec_type == AVMEDIA_TYPE_DATA) {
-			codec_type = CODEC_TYPE_DATA;
-		}
-
 		(*env)->CallVoidMethod(env, stream_info,
-				stream_info_set_media_type_internal_method, (jint) codec_type);
+				stream_info_set_media_type_internal_method, (jint) codec->codec_type);
 		(*env)->CallVoidMethod(env, stream_info,
 				stream_info_set_stream_number_method, (jint) i);
 

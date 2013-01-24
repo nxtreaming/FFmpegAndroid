@@ -23,17 +23,6 @@
 
 static char *player_class_path_name = "net/uplayer/ffmpeg/FFmpegPlayer";
 
-// FFmpegStreamInfo.CodeType
-enum CodecType {
-	CODEC_TYPE_UNKNOWN = 0,
-	CODEC_TYPE_AUDIO = 1,
-	CODEC_TYPE_VIDEO = 2,
-	CODEC_TYPE_SUBTITLE = 3,
-	CODEC_TYPE_ATTACHMENT = 4,
-	CODEC_TYPE_NB = 5,
-	CODEC_TYPE_DATA = 6
-};
-
 enum Msgs {
 	MSG_NONE = 0, MSG_STOP = 1
 };
