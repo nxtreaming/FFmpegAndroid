@@ -781,7 +781,7 @@ void * player_read_stream(void *data) {
 	PacketData *packet_data;
 	int to_write;
 	int interrupt_ret;
-	JavaVMAttachArgs thread_spec = { JNI_VERSION_1_4, "FFmpegReadFromStream", NULL };
+	JavaVMAttachArgs thread_spec = { JNI_VERSION_1_4, "FFmpegReadStream", NULL };
 
 	jint ret = (*player->get_javavm)->AttachCurrentThread(player->get_javavm, &env, &thread_spec);
 	if (ret) {
@@ -816,7 +816,6 @@ void * player_read_stream(void *data) {
 			packet_data->end_of_stream = 1;
 			LOGI(3, "player_read_stream sending end_of_stream packet");
 			queue_push_finish_impl(queue, &player->mutex_queue, &player->cond_queue, to_write);
-
 			for (;;) {
 				if (player->stop)
 					goto exit_loop;
@@ -856,7 +855,7 @@ parse_frame:
 		packet_data = queue_push_start_impl(queue,
 			&player->mutex_queue, &player->cond_queue, &to_write,
 			(QueueCheckFunc) player_read_stream_check, player,
-			(void **) &interrupt_ret);
+			(void **)&interrupt_ret);
 		if (packet_data == NULL) {
 			if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_STOP) {
 				LOGI(2, "player_read_stream queue interrupt stop");
@@ -934,7 +933,8 @@ seek_loop:
 		LOGI(3, "player_read_stream waiting for flush");
 
 		// waiting for all stream flush
-		while (!player_if_all_no_array_elements_has_value(player,
+		// if player has been paused, it will fail to receive any |cond_queue|
+		while (!player->pause && !player_if_all_no_array_elements_has_value(player,
 				player->flush_streams, FALSE))
 			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 
