@@ -772,13 +772,12 @@ static int player_if_all_no_array_elements_has_value(Player *player, int *array,
 void * player_read_stream(void *data) {
 	Player *player = (Player *) data;
 	int i, err = ERROR_NO_ERROR;
-
 	AVPacket packet, *pkt = &packet;
 	int64_t seek_target;
 	JNIEnv * env;
 	Queue *queue;
-	int seek_input_stream_number;
-	AVStream * seek_input_stream;
+	int seek_stream_index;
+	AVStream * seek_stream;
 	PacketData *packet_data;
 	int to_write;
 	int interrupt_ret;
@@ -802,7 +801,7 @@ void * player_read_stream(void *data) {
 			packet_data = queue_push_start_impl(queue,
 				&player->mutex_queue, &player->cond_queue, &to_write,
 				(QueueCheckFunc) player_read_stream_check, player,
-				(void **) &interrupt_ret);
+				(void **)&interrupt_ret);
 			if (packet_data == NULL) {
 				if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_STOP) {
 					LOGI(2, "player_read_stream queue interrupt stop");
@@ -905,16 +904,16 @@ exit_loop:
 
 seek_loop:
 		// setting stream thet will be used as a base for seeking
-		seek_input_stream_number = player->input_stream_numbers[player->video_stream_index];
-		seek_input_stream = player->input_streams[player->video_stream_index];
+		seek_stream_index = player->input_stream_numbers[player->video_stream_index];
+		seek_stream = player->input_streams[player->video_stream_index];
 
 		// getting seek target time in time_base value
 		seek_target = av_rescale_q(AV_TIME_BASE * (int64_t) player->seek_position, AV_TIME_BASE_Q,
-			seek_input_stream->time_base);
+			seek_stream->time_base);
 		LOGI(3, "player_read_stream seeking to: %ds, time_base: %lld", player->seek_position, seek_target);
 
 		// seeking
-		if (av_seek_frame(player->format_ctx, seek_input_stream_number, seek_target, 0) < 0) {
+		if (av_seek_frame(player->format_ctx, seek_stream_index, seek_target, 0) < 0) {
 			// seeking error - trying to play movie without it
 			LOGE(1, "Error while seeking");
 			player->seek_position = DO_NOT_SEEK;
