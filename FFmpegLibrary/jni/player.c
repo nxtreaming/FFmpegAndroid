@@ -97,8 +97,8 @@ typedef struct Player {
 	int input_inited;
 
 	int stream_index;
-	int video_stream_no;
-	int audio_stream_no;
+	int video_stream_index;
+	int audio_stream_index;
 	AVStream *input_streams[MAX_STREAMS];
 	AVCodecContext * input_codec_ctxs[MAX_STREAMS];
 	int input_stream_numbers[MAX_STREAMS];
@@ -159,7 +159,7 @@ typedef struct State {
 } State;
 
 typedef struct DecoderState {
-	int stream_no;
+	int stream_index;
 	struct Player *player;
 	JNIEnv* env;
 	jobject thiz;
@@ -167,7 +167,7 @@ typedef struct DecoderState {
 
 typedef struct DecoderData {
 	struct Player *player;
-	int stream_no;
+	int stream_index;
 } DecoderData;
 
 typedef struct VideoRGBFrameElem {
@@ -220,12 +220,12 @@ void throw_runtime_exception(JNIEnv *env, const char * msg) {
 
 QueueCheckFuncRet player_decode_queue_check(Queue *queue, DecoderData *decoderData, int *ret) {
 	Player *player = decoderData->player;
-	int stream_no = decoderData->stream_no;
-	if (player->stop_streams[stream_no]) {
+
+	if (player->stop_streams[decoderData->stream_index]) {
 		*ret = DECODE_CHECK_MSG_STOP;
 		return QUEUE_CHECK_FUNC_RET_SKIP;
 	}
-	if (player->flush_streams[stream_no]) {
+	if (player->flush_streams[decoderData->stream_index]) {
 		*ret = DECODE_CHECK_MSG_FLUSH;
 		return QUEUE_CHECK_FUNC_RET_SKIP;
 	}
@@ -240,9 +240,8 @@ void player_decode_audio_flush(DecoderData * decoder_data, JNIEnv * env) {
 int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
 	int got_frame_ptr;
 	Player *player = decoder_data->player;
-	int stream_no = decoder_data->stream_no;
-	AVCodecContext * ctx = player->input_codec_ctxs[stream_no];
-	AVFrame * frame = player->input_frames[stream_no];
+	AVCodecContext * ctx = player->input_codec_ctxs[decoder_data->stream_index];
+	AVFrame * frame = player->input_frames[decoder_data->stream_index];
 
 	LOGI(3, "player_decode_audio decoding");
 	AVPacket *packet = packet_data->packet;
@@ -318,10 +317,9 @@ void player_decode_video_flush(DecoderData * decoder_data, JNIEnv * env) {
 int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
 	int got_frame_ptr;
 	Player *player = decoder_data->player;
-	int stream_no = decoder_data->stream_no;
-	AVCodecContext * ctx = player->input_codec_ctxs[stream_no];
-	AVFrame * frame = player->input_frames[stream_no];
-	AVStream * stream = player->input_streams[stream_no];
+	AVCodecContext * ctx = player->input_codec_ctxs[decoder_data->stream_index];
+	AVFrame * frame = player->input_frames[decoder_data->stream_index];
+	AVStream * stream = player->input_streams[decoder_data->stream_index];
 	int interrupt_ret;
 	int to_write;
 	VideoRGBFrameElem * elem;
@@ -492,15 +490,14 @@ void *player_decode(void * data) {
 	int err = ERROR_NO_ERROR;
 	DecoderData *decoder_data = data;
 	Player *player = decoder_data->player;
-	int stream_no = decoder_data->stream_no;
-	Queue *queue = player->packets_queue[stream_no];
-	AVCodecContext * ctx = player->input_codec_ctxs[stream_no];
+	Queue *queue = player->packets_queue[decoder_data->stream_index];
+	AVCodecContext * ctx = player->input_codec_ctxs[decoder_data->stream_index];
 	enum AVMediaType codec_type = ctx->codec_type;
 
 	int stop = FALSE;
 	JNIEnv * env;
 	char thread_title[256];
-	sprintf(thread_title, "FFmpegDecode[%d]", stream_no);
+	sprintf(thread_title, "FFmpegDecode[%d]", decoder_data->stream_index);
 
 	JavaVMAttachArgs thread_spec = { JNI_VERSION_1_4, thread_title, NULL };
 
@@ -512,7 +509,7 @@ void *player_decode(void * data) {
 	}
 
 	for (;;) {
-		LOGI(10, "player_decode waiting for frame[%d]", stream_no);
+		LOGI(10, "player_decode waiting for frame[%d]", decoder_data->stream_index);
 		int interrupt_ret;
 		PacketData *packet_data;
 		pthread_mutex_lock(&player->mutex_queue);
@@ -535,7 +532,7 @@ pop:
 			}
 		}
 		pthread_mutex_unlock(&player->mutex_queue);
-		LOGI(10, "player_decode decoding frame[%d]", stream_no);
+		LOGI(10, "player_decode decoding frame[%d]", decoder_data->stream_index);
 		if (packet_data->end_of_stream) {
 			LOGI(10, "player_decode read end of stream");
 		}
@@ -573,10 +570,10 @@ pop:
 		}
 		continue;
 stop:
-		LOGI(2, "player_decode stop[%d]", stream_no);
+		LOGI(2, "player_decode stop[%d]", decoder_data->stream_index);
 		stop = TRUE;
 flush:
-		LOGI(2, "player_decode flush[%d]", stream_no);
+		LOGI(2, "player_decode flush[%d]", decoder_data->stream_index);
 		PacketData *to_free; // FIXME move to PacketData
 		while ((to_free = queue_pop_start_impl_non_block(queue))
 				!= NULL) {
@@ -585,24 +582,24 @@ flush:
 			}
 			queue_pop_finish_impl(queue, &player->mutex_queue, &player->cond_queue);
 		}
-		LOGI(2, "player_decode flushing playback[%d]", stream_no);
+		LOGI(2, "player_decode flushing playback[%d]", decoder_data->stream_index);
 
 		if (codec_type == AVMEDIA_TYPE_AUDIO) {
 			player_decode_audio_flush(decoder_data, env);
 		} else if (codec_type == AVMEDIA_TYPE_VIDEO) {
 			player_decode_video_flush(decoder_data, env);
 		}
-		LOGI(2, "player_decode flushed playback[%d]", stream_no);
+		LOGI(2, "player_decode flushed playback[%d]", decoder_data->stream_index);
 
 		if (stop) {
 			LOGI(2, "player_decode stopping stream");
-			player->stop_streams[stream_no] = FALSE;
+			player->stop_streams[decoder_data->stream_index] = FALSE;
 			pthread_cond_broadcast(&player->cond_queue);
 			pthread_mutex_unlock(&player->mutex_queue);
 			goto detach_current_thread;
 		} else {
-			LOGI(2, "player_decode flush stream[%d]", stream_no);
-			player->flush_streams[stream_no] = FALSE;
+			LOGI(2, "player_decode flush stream[%d]", decoder_data->stream_index);
+			player->flush_streams[decoder_data->stream_index] = FALSE;
 			pthread_cond_broadcast(&player->cond_queue);
 			goto pop;
 		}
@@ -633,15 +630,15 @@ QueueCheckFuncRet player_read_stream_check(Queue *queue, Player *player, int *re
 }
 
 static void player_assign_to_no_boolean_array(Player *player, int* array, int value) {
-	int stream_no;
-	for (stream_no = 0; stream_no < player->stream_index; ++stream_no) {
-		array[stream_no] = value;
+	int i;
+	for (i = 0; i < player->stream_index; ++i) {
+		array[i] = value;
 	}
 }
 static int player_if_all_no_array_elements_has_value(Player *player, int *array, int value) {
-	int stream_no;
-	for (stream_no = 0; stream_no < player->stream_index; ++stream_no) {
-		if (array[stream_no] != value)
+	int i;
+	for (i = 0; i < player->stream_index; ++i) {
+		if (array[i] != value)
 			return FALSE;
 	}
 	return TRUE;
@@ -676,7 +673,7 @@ void * player_read_stream(void *data) {
 		if (ret < 0) {
 			pthread_mutex_lock(&player->mutex_queue);
 			LOGI(3, "player_read_stream stream end");
-			queue = player->packets_queue[player->video_stream_no];
+			queue = player->packets_queue[player->video_stream_index];
 			packet_data = queue_push_start_impl(queue,
 				&player->mutex_queue, &player->cond_queue, &to_write,
 				(QueueCheckFunc) player_read_stream_check, player,
@@ -715,16 +712,16 @@ void * player_read_stream(void *data) {
 		if (player->seek_position != DO_NOT_SEEK) {
 			goto seek_loop;
 		}
-		int stream_no;
+		int i;
 		int stream_index = player->stream_index;
 
 parse_frame:
 		queue = NULL;
 		LOGI(3, "player_read_stream looking for stream")
-		for (stream_no = 0; stream_no < stream_index; ++stream_no) {
-			if (packet.stream_index == player->input_stream_numbers[stream_no]) {
-				queue = player->packets_queue[stream_no];
-				LOGI(3, "player_read_stream stream found [%d]", stream_no);
+		for (i = 0; i < stream_index; ++i) {
+			if (packet.stream_index == player->input_stream_numbers[i]) {
+				queue = player->packets_queue[i];
+				LOGI(3, "player_read_stream stream found [%d]", i);
 			}
 		}
 
@@ -777,8 +774,8 @@ exit_loop:
 			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 
 		// flush internal buffers
-		for (stream_no = 0; stream_no < stream_index; ++stream_no) {
-			avcodec_flush_buffers(player->input_codec_ctxs[stream_no]);
+		for (i = 0; i < stream_index; ++i) {
+			avcodec_flush_buffers(player->input_codec_ctxs[i]);
 		}
 
 		pthread_mutex_unlock(&player->mutex_queue);
@@ -786,8 +783,8 @@ exit_loop:
 
 seek_loop:
 		// setting stream thet will be used as a base for seeking
-		seek_input_stream_number = player->input_stream_numbers[player->video_stream_no];
-		seek_input_stream = player->input_streams[player->video_stream_no];
+		seek_input_stream_number = player->input_stream_numbers[player->video_stream_index];
+		seek_input_stream = player->input_streams[player->video_stream_index];
 
 		// getting seek target time in time_base value
 		seek_target = av_rescale_q(AV_TIME_BASE * (int64_t) player->seek_position, AV_TIME_BASE_Q,
@@ -822,8 +819,8 @@ seek_loop:
 
 		LOGI(3, "player_read_stream flushing internal codec bffers");
 		// flush internal buffers
-		for (stream_no = 0; stream_no < stream_index; ++stream_no) {
-			avcodec_flush_buffers(player->input_codec_ctxs[stream_no]);
+		for (i = 0; i < stream_index; ++i) {
+			avcodec_flush_buffers(player->input_codec_ctxs[i]);
 		}
 
 		// finishing seeking
@@ -849,11 +846,10 @@ end:
 int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
 		int64_t pts, uint8_t *data, int data_size, int original_data_size) {
 	Player *player = decoder_data->player;
-	int stream_no = decoder_data->stream_no;
 	int err = ERROR_NO_ERROR;
 	int ret;
-	AVCodecContext * c = player->input_codec_ctxs[stream_no];
-	AVStream *stream = player->input_streams[stream_no];
+	AVCodecContext * c = player->input_codec_ctxs[decoder_data->stream_index];
+	AVStream *stream = player->input_streams[decoder_data->stream_index];
 	LOGI(10, "player_write_audio Writing audio frame")
 
 	jbyteArray samples_byte_array = (*env)->NewByteArray(env, data_size);
@@ -949,8 +945,7 @@ void *player_fill_video_rgb_frame(DecoderState *decoder_state) {
 	Player *player = decoder_state->player;
 	JNIEnv *env = decoder_state->env;
 	jobject thiz = decoder_state->thiz;
-	int stream_no = decoder_state->stream_no;
-	AVCodecContext * ctx = player->input_codec_ctxs[player->video_stream_no];
+	AVCodecContext * ctx = player->input_codec_ctxs[player->video_stream_index];
 
 	VideoRGBFrameElem * elem = malloc(sizeof(VideoRGBFrameElem));
 	if (elem == NULL) {
@@ -1035,8 +1030,8 @@ void player_update_time(State *state, double time) {
 	player_update_current_time(state, FALSE);
 }
 
-void player_open_stream_free(Player *player, int stream_no) {
-	AVCodecContext ** ctx = &player->input_codec_ctxs[stream_no];
+void player_open_stream_free(Player *player, int stream_index) {
+	AVCodecContext ** ctx = &player->input_codec_ctxs[stream_index];
 	if (*ctx != NULL) {
 		avcodec_close(*ctx);
 		*ctx = NULL;
@@ -1069,17 +1064,17 @@ void player_find_streams_free(Player *player) {
 		player_open_stream_free(player, i);
 	}
 	player->stream_index = 0;
-	player->video_stream_no = -1;
-	player->audio_stream_no = -1;
+	player->video_stream_index = -1;
+	player->audio_stream_index = -1;
 }
 
-int player_try_open_stream(Player *player, enum AVMediaType codec_type, int stream_no) {
-	if (stream_no < 0)
+int player_try_open_stream(Player *player, enum AVMediaType codec_type, int stream_index) {
+	if (stream_index < 0)
 		return -1;
-	if (stream_no >= player->format_ctx->nb_streams)
+	if (stream_index >= player->format_ctx->nb_streams)
 		return -1;
 
-	AVStream *stream = player->format_ctx->streams[stream_no];
+	AVStream *stream = player->format_ctx->streams[stream_index];
 	AVCodecContext *ctx = stream->codec;
 	if (ctx->codec_type != codec_type) {
 		return -1;
@@ -1088,16 +1083,16 @@ int player_try_open_stream(Player *player, enum AVMediaType codec_type, int stre
 	if (err < 0) {
 		return -1;
 	}
-	return stream_no;
+	return stream_index;
 }
 
-int player_find_stream(Player *player, enum AVMediaType codec_type, int recommended_stream_no) {
+int player_find_stream(Player *player, enum AVMediaType codec_type, int recommended_stream_index) {
 	int streams_no = player->stream_index;
 	int err = ERROR_NO_ERROR;
 	LOGI(3, "player_find_stream, type: %d", codec_type);
 
 	int bn_stream = player_try_open_stream(player, codec_type,
-			recommended_stream_no);
+			recommended_stream_index);
 	if (bn_stream < 0) {
 		int i;
 		for (i = 0; i < player->format_ctx->nb_streams; i++) {
@@ -1254,20 +1249,20 @@ free_map_class:
 }
 
 int player_alloc_frames_free(Player *player) {
-	int stream_no;
-	for (stream_no = 0; stream_no < player->stream_index; ++stream_no) {
-		if (player->input_frames[stream_no] != NULL) {
-			av_freep(&player->input_frames[stream_no]);
+	int i;
+	for (i = 0; i < player->stream_index; ++i) {
+		if (player->input_frames[i] != NULL) {
+			av_freep(&player->input_frames[i]);
 		}
 	}
 	return 0;
 }
 
 int player_alloc_frames(Player *player) {
-	int stream_no;
-	for (stream_no = 0; stream_no < player->stream_index; ++stream_no) {
-		player->input_frames[stream_no] = avcodec_alloc_frame();
-		if (player->input_frames[stream_no] == NULL) {
+	int i;
+	for (i = 0; i < player->stream_index; ++i) {
+		player->input_frames[i] = avcodec_alloc_frame();
+		if (player->input_frames[i] == NULL) {
 			return -ERROR_COULD_NOT_ALLOC_FRAME;
 		}
 	}
@@ -1276,13 +1271,13 @@ int player_alloc_frames(Player *player) {
 
 int player_alloc_queues(State *state) {
 	Player *player = state->player;
-	int stream_no;
-	for (stream_no = 0; stream_no < player->stream_index; ++stream_no) {
-		player->packets_queue[stream_no] = queue_init_with_custom_lock(100,
+	int i;
+	for (i = 0; i < player->stream_index; ++i) {
+		player->packets_queue[i] = queue_init_with_custom_lock(100,
 			(queue_fill_func) player_fill_packet,
 			(queue_free_func) player_free_packet, state, state,
 			&player->mutex_queue, &player->cond_queue);
-		if (player->packets_queue[stream_no] == NULL) {
+		if (player->packets_queue[i] == NULL) {
 			return -ERROR_COULD_NOT_PREPARE_PACKETS_QUEUE;
 		}
 	}
@@ -1291,11 +1286,11 @@ int player_alloc_queues(State *state) {
 
 void player_alloc_queues_free(State *state) {
 	Player *player = state->player;
-	int stream_no;
-	for (stream_no = 0; stream_no < player->stream_index; ++stream_no) {
-		if (player->packets_queue[stream_no] != NULL) {
-			queue_free(player->packets_queue[stream_no], &player->mutex_queue, &player->cond_queue, state);
-			player->packets_queue[stream_no] = NULL;
+	int i;
+	for (i = 0; i < player->stream_index; ++i) {
+		if (player->packets_queue[i] != NULL) {
+			queue_free(player->packets_queue[i], &player->mutex_queue, &player->cond_queue, state);
+			player->packets_queue[i] = NULL;
 		}
 	}
 }
@@ -1324,7 +1319,7 @@ int player_prepare_rgb_frames(DecoderState *decoder_state, State *state) {
 }
 
 int player_preapre_sws_context(Player *player) {
-	AVCodecContext * ctx = player->input_codec_ctxs[player->video_stream_no];
+	AVCodecContext * ctx = player->input_codec_ctxs[player->video_stream_index];
 	int destWidth = ctx->width;
 	int destHeight = ctx->height;
 
@@ -1358,8 +1353,8 @@ void player_create_audio_track_free(Player *player, State *state) {
 		(*state->env)->DeleteGlobalRef(state->env, player->audio_track);
 		player->audio_track = NULL;
 	}
-	if (player->audio_stream_no >= 0) {
-		AVCodecContext ** ctx = &player->input_codec_ctxs[player->audio_stream_no];
+	if (player->audio_stream_index >= 0) {
+		AVCodecContext ** ctx = &player->input_codec_ctxs[player->audio_stream_index];
 		if (*ctx != NULL) {
 			LOGI(7, "player_set_data_sourceclose_audio_codec");
 			avcodec_close(*ctx);
@@ -1370,7 +1365,7 @@ void player_create_audio_track_free(Player *player, State *state) {
 
 int player_create_audio_track(Player *player, State *state) {
 	//creating audio track
-	AVCodecContext * ctx = player->input_codec_ctxs[player->audio_stream_no];
+	AVCodecContext * ctx = player->input_codec_ctxs[player->audio_stream_index];
 	int sample_rate = ctx->sample_rate;
 	int channels = ctx->channels;
 
@@ -1629,8 +1624,8 @@ void player_stop(State * state) {
 }
 
 int player_set_data_source(State *state, const char *file_path,
-		AVDictionary *dictionary, int video_stream_no, int audio_stream_no,
-		int subtitle_stream_no) {
+		AVDictionary *dictionary, int video_stream_index, int audio_stream_index,
+		int subtitle_stream_index) {
 	Player *player = state->player;
 	int err = ERROR_NO_ERROR;
 	int i;
@@ -1661,15 +1656,15 @@ int player_set_data_source(State *state, const char *file_path,
 			player)) < 0)
 		goto error;
 
-	if ((player->video_stream_no = player_find_stream(player,
-			AVMEDIA_TYPE_VIDEO, video_stream_no)) < 0) {
-		err = player->video_stream_no;
+	if ((player->video_stream_index = player_find_stream(player,
+			AVMEDIA_TYPE_VIDEO, video_stream_index)) < 0) {
+		err = player->video_stream_index;
 		goto error;
 	}
 
-	if ((player->audio_stream_no = player_find_stream(player,
-			AVMEDIA_TYPE_AUDIO, audio_stream_no)) < 0) {
-		err = player->audio_stream_no;
+	if ((player->audio_stream_index = player_find_stream(player,
+			AVMEDIA_TYPE_AUDIO, audio_stream_index)) < 0) {
+		err = player->audio_stream_index;
 		goto error;
 	}
 
@@ -1679,7 +1674,7 @@ int player_set_data_source(State *state, const char *file_path,
 	if ((err = player_alloc_queues(state)) < 0)
 		goto error;
 
-	DecoderState video_decoder_state = { player->video_stream_no, player, state->env, state->thiz };
+	DecoderState video_decoder_state = { player->video_stream_index, player, state->env, state->thiz };
 	if ((err = player_prepare_rgb_frames(&video_decoder_state, state)) < 0)
 		goto error;
 
@@ -1862,8 +1857,8 @@ void jni_player_read_dictionary(JNIEnv *env, AVDictionary **dictionary, jobject 
 }
 
 int jni_player_set_data_source(JNIEnv *env, jobject thiz, jstring string,
-		jobject dictionary, int video_stream_no, int audio_stream_no,
-		int subtitle_stream_no) {
+		jobject dictionary, int video_stream_index, int audio_stream_index,
+		int subtitle_stream_index) {
 	AVDictionary *dict = NULL;
 	if (dictionary != NULL) {
 		jni_player_read_dictionary(env, &dict, dictionary);
@@ -1874,8 +1869,8 @@ int jni_player_set_data_source(JNIEnv *env, jobject thiz, jstring string,
 	Player *player = player_get_player_field(env, thiz);
 	State state = { player, env, thiz };
 
-	int ret = player_set_data_source(&state, file_path, dict, video_stream_no,
-		audio_stream_no, subtitle_stream_no);
+	int ret = player_set_data_source(&state, file_path, dict, video_stream_index,
+		audio_stream_index, subtitle_stream_index);
 
 	(*env)->ReleaseStringUTFChars(env, string, file_path);
 	return ret;
@@ -1897,8 +1892,8 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 
 	Player *player = malloc(sizeof(Player));
 	memset(player, 0, sizeof(player));
-	player->audio_stream_no = -1;
-	player->video_stream_no = -1;
+	player->audio_stream_index = -1;
+	player->video_stream_index = -1;
 	player->rendering = FALSE;
 
 	int err = ERROR_NO_ERROR;
