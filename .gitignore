@@ -10,6 +10,9 @@ FFmpegLibrary/.settings/**
 FFmpegLibrary/jni/.settings/**
 FFmpegLibrary/lint.xml
 
+FFmpegExample/*
+FFmpegExample
+
 .cproject
 .classpath
 .project
