@@ -125,5 +125,17 @@ void yuv444_2_rgb8888(uint8_t  *dst_ptr,
                 const uint32_t *tables,
                       int32_t   dither);
 
+void nv12_2_rgb565(uint8_t  *dst_ptr_,
+               const uint8_t  *y_ptr,
+               const uint8_t  *u_ptr,
+               const uint8_t  *v_ptr,
+                     int32_t   width,
+                     int32_t   height,
+                     int32_t   y_span,
+                     int32_t   uv_span,
+                     int32_t   dst_span,
+               const uint32_t *tables,
+                     int32_t   dither);
+
 
 #endif /* YUV2RGB_H */

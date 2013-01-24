@@ -41,6 +41,21 @@
 #define NELEM(x) ((int)(sizeof(x) / sizeof((x)[0])))
 #endif
 
+static JNINativeMethod player_methods[] = {
+	{"initNative", "()I", (void*) jni_player_init},
+	{"deallocNative", "()V", (void*) jni_player_dealloc},
+	{"seekNative", "(I)V", (void*) jni_player_seek},
+	{"pauseNative", "()V", (void*) jni_player_pause},
+	{"resumeNative", "()V", (void*) jni_player_resume},
+	{"setDataSourceNative", "(Ljava/lang/String;Ljava/util/Map;III)I", (void*) jni_player_set_data_source},
+	{"stopNative", "()V", (void*) jni_player_stop},
+	{"renderFrameStart", "()V", (void*) jni_player_render_frame_start},
+	{"renderFrameStop", "()V", (void*) jni_player_render_frame_stop},
+	{"renderFrameNative", "()Landroid/graphics/Bitmap;", (void*) jni_player_render_frame},
+	{"releaseFrame", "()V", (void*) jni_player_release_frame},
+	{"getVideoDurationNative", "()I", (void*) jni_player_get_video_duration},
+};
+
 static int register_native_methods(JNIEnv* env,
 		const char* class_name,
 		JNINativeMethod* methods,

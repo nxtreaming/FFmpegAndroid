@@ -28,6 +28,7 @@
 #include <libavutil/samplefmt.h>
 
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 
 //#include <libavcodec/opt.h>
 #include <libavcodec/avfft.h>
@@ -182,6 +183,72 @@ typedef struct PacketData {
 	AVPacket *packet;
 } PacketData;
 
+static JavaMethod empty_constructor = {"<init>", "()V"};
+
+// InterruptedException
+static char *interrupted_exception_class_path_name = "java/lang/InterruptedException";
+
+// RuntimeException
+static char *runtime_exception_class_path_name = "java/lang/RuntimeException";
+
+// NotPlayingException
+static char *not_playing_exception_class_path_name = "net/uplayer/ffmpeg/NotPlayingException";
+
+// HashMap
+static char *hash_map_class_path_name = "java/util/HashMap";
+static char *map_class_path_name = "java/util/Map";
+static JavaMethod map_key_set = {"keySet", "()Ljava/util/Set;"};
+static JavaMethod map_get = {"get", "(Ljava/lang/Object;)Ljava/lang/Object;"};
+static JavaMethod map_put = {"put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"};
+
+// FFmpegStreamInfo
+static char *stream_info_class_path_name = "net/uplayer/ffmpeg/FFmpegStreamInfo";
+static JavaMethod steram_info_set_metadata = {"setMetadata", "(Ljava/util/Map;)V"};
+static JavaMethod steram_info_set_media_type_internal = {"setMediaTypeInternal", "(I)V"};
+static JavaMethod stream_info_set_stream_number = {"setStreamNumber", "(I)V"};
+
+// Set
+static char *set_class_path_name = "java/util/Set";
+static JavaMethod set_iterator = {"iterator", "()Ljava/util/Iterator;"};
+
+// Iterator
+static char *iterator_class_path_name = "java/util/Iterator";
+static JavaMethod iterator_next = {"next", "()Ljava/lang/Object;"};
+static JavaMethod iterator_has_next = {"hasNext", "()Z"};
+
+static const struct {
+    const char *name;
+    int         nb_channels;
+    uint64_t     layout;
+} channel_android_layout_map[] = {
+    { "mono",        1,  AV_CH_LAYOUT_MONO },
+    { "stereo",      2,  AV_CH_LAYOUT_STEREO },
+    { "2.1",         3,  AV_CH_LAYOUT_2POINT1 },
+    { "4.0",         4,  AV_CH_LAYOUT_4POINT0 },
+    { "4.1",         5,  AV_CH_LAYOUT_4POINT1 },
+    { "5.1",         6,  AV_CH_LAYOUT_5POINT1_BACK },
+    { "6.0",         6,  AV_CH_LAYOUT_6POINT0 },
+    { "7.0(front)",  7,  AV_CH_LAYOUT_7POINT0_FRONT },
+    { "7.1",         8,  AV_CH_LAYOUT_7POINT1 },
+};
+
+// FFmpegPlayer
+static JavaField player_m_native_player = {"mNativePlayer", "I"};
+static JavaMethod player_on_update_time = {"onUpdateTime","(IIZ)V"};
+static JavaMethod player_prepare_audio_track = {"prepareAudioTrack", "(II)Landroid/media/AudioTrack;"};
+static JavaMethod player_prepare_frame = {"prepareFrame", "(II)Landroid/graphics/Bitmap;"};
+static JavaMethod player_set_stream_info = {"setStreamsInfo", "([Lnet/uplayer/ffmpeg/FFmpegStreamInfo;)V"};
+
+// AudioTrack
+static char *android_track_class_path_name = "android/media/AudioTrack";
+static JavaMethod audio_track_write = {"write", "([BII)I"};
+static JavaMethod audio_track_pause = {"pause", "()V"};
+static JavaMethod audio_track_play = {"play", "()V"};
+static JavaMethod audio_track_flush = {"flush", "()V"};
+static JavaMethod audio_track_stop = {"stop", "()V"};
+static JavaMethod audio_track_get_channel_count = {"getChannelCount", "()I"};
+static JavaMethod audio_track_get_sample_rate = {"getSampleRate", "()I"};
+
 #ifdef MEASURE_TIME
 struct timespec render_frame_start, render_frame_stop;
 
@@ -216,6 +283,65 @@ void throw_interrupted_exception(JNIEnv *env, const char * msg) {
 
 void throw_runtime_exception(JNIEnv *env, const char * msg) {
 	throw_exception(env, runtime_exception_class_path_name, msg);
+}
+
+int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
+	int64_t pts, uint8_t *data, int data_size, int original_data_size) {
+	Player *player = decoder_data->player;
+	int err = ERROR_NO_ERROR;
+	int ret;
+	AVCodecContext * c = player->input_codec_ctxs[decoder_data->stream_index];
+	AVStream *stream = player->input_streams[decoder_data->stream_index];
+	LOGI(10, "player_write_audio Writing audio frame")
+
+	jbyteArray samples_byte_array = (*env)->NewByteArray(env, data_size);
+	if (samples_byte_array == NULL) {
+		err = -ERROR_NOT_CREATED_AUDIO_SAMPLE_BYTE_ARRAY;
+		goto end;
+	}
+
+	pthread_mutex_lock(&player->mutex_queue);
+
+	if (pts != AV_NOPTS_VALUE) {
+		player->audio_clock = av_q2d(stream->time_base) * pts;
+	} else {
+		player->audio_clock += (double) original_data_size
+				/ (c->channels * c->sample_rate
+						* av_get_bytes_per_sample(c->sample_fmt));
+	}
+	player->audio_write_time = av_gettime();
+	pthread_cond_broadcast(&player->cond_queue);
+	pthread_mutex_unlock(&player->mutex_queue);
+
+	LOGI(10, "player_write_audio Writing sample data")
+
+	jbyte *jni_samples = (*env)->GetByteArrayElements(env, samples_byte_array,
+			NULL);
+	memcpy(jni_samples, data, data_size);
+	(*env)->ReleaseByteArrayElements(env, samples_byte_array, jni_samples, 0);
+
+	LOGI(10, "player_write_audio playing audio track");
+	ret = (*env)->CallIntMethod(env, player->audio_track,
+			player->audio_track_write, samples_byte_array, 0, data_size);
+	jthrowable exc = (*env)->ExceptionOccurred(env);
+	if (exc) {
+		err = -ERROR_PLAYING_AUDIO;
+		LOGE(3, "Could not write audio track: reason in exception");
+		// TODO maybe release exc
+		goto free_local_ref;
+	}
+	if (ret < 0) {
+		err = -ERROR_PLAYING_AUDIO;
+		LOGE(3,
+				"Could not write audio track: reason: %d look in AudioTrack.write()", ret);
+		goto free_local_ref;
+	}
+
+free_local_ref:
+	LOGI(10, "player_write_audio releasing local ref");
+	(*env)->DeleteLocalRef(env, samples_byte_array);
+end:
+	return err;
 }
 
 QueueCheckFuncRet player_decode_queue_check(Queue *queue, DecoderData *decoderData, int *ret) {
@@ -267,7 +393,7 @@ int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketData *pa
 				* av_get_bytes_per_sample(player->audio_track_format);
 		int len2 = swr_convert(player->swr_context, out,
 				sizeof(player->audio_buf2) / sample_per_buffer_divider,
-				frame->data, frame->nb_samples);
+				(uint8_t const **)frame->data, frame->nb_samples);
 		if (len2 < 0) {
 			LOGE(1, "Could not resample frame");
 			return -ERROR_COULD_NOT_RESAMPLE_FRAME;
@@ -315,7 +441,6 @@ void player_decode_video_flush(DecoderData * decoder_data, JNIEnv * env) {
 }
 
 int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
-	int got_frame_ptr;
 	Player *player = decoder_data->player;
 	AVCodecContext * ctx = player->input_codec_ctxs[decoder_data->stream_index];
 	AVFrame * frame = player->input_frames[decoder_data->stream_index];
@@ -385,7 +510,7 @@ int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketData *pa
 
 	double time = (double) pts * av_q2d(stream->time_base);
 	LOGI(10,
-			"player_decode_video Decoded video frame: %f, time_base: %d", time, pts);
+			"player_decode_video Decoded video frame: %f, time_base: %lld", time, pts);
 
 	// saving in buffer converted video frame
 	LOGI(7, "player_decode_video copy wait");
@@ -454,15 +579,15 @@ int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketData *pa
 	if (ctx->pix_fmt == AV_PIX_FMT_YUV420P) {
 		LOGI(9, "Using yuv420_2_rgb565");
 		yuv420_2_rgb565(rgbFrame->data[0], frame->data[0], frame->data[1],
-				frame->data[2], destWidth, destHeight, frame->linesize[0],
-				frame->linesize[1], destWidth << 1, yuv2rgb565_table,
-				player->dither++);
+			frame->data[2], destWidth, destHeight, frame->linesize[0],
+			frame->linesize[1], destWidth << 1, yuv2rgb565_table,
+			player->dither++);
 	} else if (ctx->pix_fmt == AV_PIX_FMT_NV12) {
 		LOGI(9, "Using nv12_2_rgb565");
 		nv12_2_rgb565(rgbFrame->data[0], frame->data[0], frame->data[1],
-						frame->data[1]+1, destWidth, destHeight, frame->linesize[0],
-						frame->linesize[1], destWidth << 1, yuv2rgb565_table,
-						player->dither++);
+			frame->data[1]+1, destWidth, destHeight, frame->linesize[0],
+			frame->linesize[1], destWidth << 1, yuv2rgb565_table,
+			player->dither++);
 	} else
 #endif
 	{
@@ -646,7 +771,7 @@ static int player_if_all_no_array_elements_has_value(Player *player, int *array,
 
 void * player_read_stream(void *data) {
 	Player *player = (Player *) data;
-	int err = ERROR_NO_ERROR;
+	int i, err = ERROR_NO_ERROR;
 
 	AVPacket packet, *pkt = &packet;
 	int64_t seek_target;
@@ -712,13 +837,11 @@ void * player_read_stream(void *data) {
 		if (player->seek_position != DO_NOT_SEEK) {
 			goto seek_loop;
 		}
-		int i;
-		int stream_index = player->stream_index;
 
 parse_frame:
 		queue = NULL;
 		LOGI(3, "player_read_stream looking for stream")
-		for (i = 0; i < stream_index; ++i) {
+		for (i = 0; i < player->stream_index; ++i) {
 			if (packet.stream_index == player->input_stream_numbers[i]) {
 				queue = player->packets_queue[i];
 				LOGI(3, "player_read_stream stream found [%d]", i);
@@ -730,7 +853,6 @@ parse_frame:
 			goto skip_loop;
 		}
 
-push_start:
 		LOGI(10, "player_read_stream waiting for queue");
 		packet_data = queue_push_start_impl(queue,
 			&player->mutex_queue, &player->cond_queue, &to_write,
@@ -774,7 +896,7 @@ exit_loop:
 			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 
 		// flush internal buffers
-		for (i = 0; i < stream_index; ++i) {
+		for (i = 0; i < player->stream_index; ++i) {
 			avcodec_flush_buffers(player->input_codec_ctxs[i]);
 		}
 
@@ -789,7 +911,7 @@ seek_loop:
 		// getting seek target time in time_base value
 		seek_target = av_rescale_q(AV_TIME_BASE * (int64_t) player->seek_position, AV_TIME_BASE_Q,
 			seek_input_stream->time_base);
-		LOGI(3, "player_read_stream seeking to: %ds, time_base: %d", player->seek_position, seek_target);
+		LOGI(3, "player_read_stream seeking to: %ds, time_base: %lld", player->seek_position, seek_target);
 
 		// seeking
 		if (av_seek_frame(player->format_ctx, seek_input_stream_number, seek_target, 0) < 0) {
@@ -819,7 +941,7 @@ seek_loop:
 
 		LOGI(3, "player_read_stream flushing internal codec bffers");
 		// flush internal buffers
-		for (i = 0; i < stream_index; ++i) {
+		for (i = 0; i < player->stream_index; ++i) {
 			avcodec_flush_buffers(player->input_codec_ctxs[i]);
 		}
 
@@ -841,65 +963,6 @@ detach_current_thread:
 end:
 	// TODO do something with error value
 	return NULL;
-}
-
-int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
-		int64_t pts, uint8_t *data, int data_size, int original_data_size) {
-	Player *player = decoder_data->player;
-	int err = ERROR_NO_ERROR;
-	int ret;
-	AVCodecContext * c = player->input_codec_ctxs[decoder_data->stream_index];
-	AVStream *stream = player->input_streams[decoder_data->stream_index];
-	LOGI(10, "player_write_audio Writing audio frame")
-
-	jbyteArray samples_byte_array = (*env)->NewByteArray(env, data_size);
-	if (samples_byte_array == NULL) {
-		err = -ERROR_NOT_CREATED_AUDIO_SAMPLE_BYTE_ARRAY;
-		goto end;
-	}
-
-	pthread_mutex_lock(&player->mutex_queue);
-
-	if (pts != AV_NOPTS_VALUE) {
-		player->audio_clock = av_q2d(stream->time_base) * pts;
-	} else {
-		player->audio_clock += (double) original_data_size
-				/ (c->channels * c->sample_rate
-						* av_get_bytes_per_sample(c->sample_fmt));
-	}
-	player->audio_write_time = av_gettime();
-	pthread_cond_broadcast(&player->cond_queue);
-	pthread_mutex_unlock(&player->mutex_queue);
-
-	LOGI(10, "player_write_audio Writing sample data")
-
-	jbyte *jni_samples = (*env)->GetByteArrayElements(env, samples_byte_array,
-			NULL);
-	memcpy(jni_samples, data, data_size);
-	(*env)->ReleaseByteArrayElements(env, samples_byte_array, jni_samples, 0);
-
-	LOGI(10, "player_write_audio playing audio track");
-	ret = (*env)->CallIntMethod(env, player->audio_track,
-			player->audio_track_write, samples_byte_array, 0, data_size);
-	jthrowable exc = (*env)->ExceptionOccurred(env);
-	if (exc) {
-		err = -ERROR_PLAYING_AUDIO;
-		LOGE(3, "Could not write audio track: reason in exception");
-		// TODO maybe release exc
-		goto free_local_ref;
-	}
-	if (ret < 0) {
-		err = -ERROR_PLAYING_AUDIO;
-		LOGE(3,
-				"Could not write audio track: reason: %d look in AudioTrack.write()", ret);
-		goto free_local_ref;
-	}
-
-free_local_ref:
-	LOGI(10, "player_write_audio releasing local ref");
-	(*env)->DeleteLocalRef(env, samples_byte_array);
-end:
-	return err;
 }
 
 Player * player_get_player_field(JNIEnv *env, jobject thiz) {
@@ -930,7 +993,6 @@ void player_free_packet(State *player, PacketData *elem) {
 
 void player_free_video_rgb_frame(State *state, VideoRGBFrameElem *elem) {
 	JNIEnv *env = state->env;
-	jobject thiz = state->thiz;
 
 	LOGI(7, "player_free_video_rgb_frame deleting global ref");
 	(*env)->DeleteGlobalRef(env, elem->jbitmap);
@@ -987,7 +1049,6 @@ void *player_fill_video_rgb_frame(DecoderState *decoder_state) {
 
 	goto end;
 
-release_ref:
 	(*env)->DeleteGlobalRef(env, elem->jbitmap);
 	elem->jbitmap = NULL;
 
@@ -1088,9 +1149,7 @@ int player_try_open_stream(Player *player, enum AVMediaType codec_type, int stre
 
 int player_find_stream(Player *player, enum AVMediaType codec_type, int recommended_stream_index) {
 	int streams_no = player->stream_index;
-	int err = ERROR_NO_ERROR;
 	LOGI(3, "player_find_stream, type: %d", codec_type);
-
 	int bn_stream = player_try_open_stream(player, codec_type,
 			recommended_stream_index);
 	if (bn_stream < 0) {
@@ -1436,7 +1495,7 @@ void player_get_video_duration(Player *player) {
 		if (stream->duration > 0) {
 			player->video_duration = round(stream->duration * av_q2d(stream->time_base));
 			LOGI(3,
-					"player_set_data_source stream[%d] duration: %ld", i, stream->duration);
+					"player_set_data_source stream[%d] duration: %lld", i, stream->duration);
 			return;
 		}
 	}
@@ -1444,7 +1503,7 @@ void player_get_video_duration(Player *player) {
 		player->video_duration = round(
 				player->format_ctx->duration * av_q2d(AV_TIME_BASE_Q));
 		LOGI(3,
-				"player_set_data_source video duration: %ld", player->format_ctx->duration)
+				"player_set_data_source video duration: %lld", player->format_ctx->duration)
 		return;
 	}
 
@@ -1454,7 +1513,7 @@ void player_get_video_duration(Player *player) {
 			player->video_duration = round(
 					stream->duration * av_q2d(stream->time_base));
 			LOGI(3,
-					"player_set_data_source stream[%d] duration: %ld", i, stream->duration);
+					"player_set_data_source stream[%d] duration: %lld", i, stream->duration);
 			return;
 		}
 	}
@@ -1595,7 +1654,6 @@ void player_play_prepare(Player *player) {
 }
 
 void player_stop_impl(State * state) {
-	int ret;
 	Player *player = state->player;
 
 	if (!player->playing)
@@ -1628,7 +1686,6 @@ int player_set_data_source(State *state, const char *file_path,
 		int subtitle_stream_index) {
 	Player *player = state->player;
 	int err = ERROR_NO_ERROR;
-	int i;
 
 	pthread_mutex_lock(&player->mutex_operation);
 
@@ -1716,10 +1773,6 @@ end:
 	LOGI(7, "player_set_data_source end");
 	pthread_mutex_unlock(&player->mutex_operation);
 	return err;
-}
-
-int player_get_next_frame(int current_frame, int max_frame) {
-	return (current_frame + 1) % max_frame;
 }
 
 void jni_player_seek(JNIEnv *env, jobject thiz, jint position) {
