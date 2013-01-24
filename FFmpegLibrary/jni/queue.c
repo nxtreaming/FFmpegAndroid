@@ -85,8 +85,6 @@ free_tabs:
 			continue;
 		queue->free_func(free_obj, elem);
 	}
-
-free_tab:
 	free(queue->tab);
 
 free_ready:
@@ -145,10 +143,7 @@ wait:
 	queue->ready[*to_write] = FALSE;
 
 	queue->next_to_write = next_next_to_write;
-
 	pthread_cond_broadcast(cond);
-
-end:
 	return queue->tab[*to_write];
 }
 
@@ -217,8 +212,6 @@ wait:
 	q=*queue;
 	to_read = q->next_to_read;
 	q->in_read = TRUE;
-
-end:
 	return q->tab[to_read];
 
 skip:

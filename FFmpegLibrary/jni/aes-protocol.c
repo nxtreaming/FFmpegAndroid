@@ -47,7 +47,7 @@
 typedef struct {
 	const AVClass *class;
 	URLContext *hd;
-	uint8_t *key;
+	char *key;
 	aes_context aes;
 	unsigned char iv[AES_KEY_SIZE];
 	unsigned char read_buff[BUFFER_SIZE];
@@ -143,19 +143,19 @@ static int aes_open(URLContext *h, const char *uri, int flags) {
 	c->read_end_point = 0;
 	c->stream_end = -1;
 
-	unsigned char sha256_key[SHA256_KEY_SIZE];
+	char sha256_key[SHA256_KEY_SIZE];
 	sha2_context ctx;
 	sha2_starts(&ctx, 0);
-	sha2_update(&ctx, c->key, BASE64_KEY_SIZE);
-	sha2_finish(&ctx, sha256_key);
+	sha2_update(&ctx, (unsigned char*)c->key, BASE64_KEY_SIZE);
+	sha2_finish(&ctx, (unsigned char*)sha256_key);
 	log_hex("aes_open: sha256_key[%d]: %s", sha256_key, SHA256_KEY_SIZE);
 
-	unsigned char aes_key[AES_KEY_SIZE];
+	char aes_key[AES_KEY_SIZE];
 	memcpy(aes_key, sha256_key, AES_KEY_SIZE);
 
 	log_hex("aes_open: aes_key[%d]: %s", aes_key, AES_KEY_SIZE);
 
-	aes_setkey_dec(&c->aes, aes_key, AES_KEY_SIZE << 3);
+	aes_setkey_dec(&c->aes, (unsigned char*)aes_key, AES_KEY_SIZE << 3);
 
 //    h->is_streamed = 1; // disable seek
 	LOGI(3, "aes_open: finished opening");
@@ -190,7 +190,7 @@ static int64_t aes_seek(URLContext *h, int64_t pos, int whence) {
 		return c->stream_end;
 
 	case SEEK_END:
-		LOGI(3, "aes_seek: pos: %d, SEEK_END", pos);
+		LOGI(3, "aes_seek: pos: %lld, SEEK_END", pos);
 		// The offset is set to the size of the file plus offset bytes.
 		if (c->stream_end < 0) {
 			c->stream_end = ffurl_seek(c->hd, 0, AVSEEK_SIZE);
@@ -274,10 +274,8 @@ static int aes_read(URLContext *h, uint8_t *buf, int size) {
 			aes_crypt_cbc(&c->aes, AES_DECRYPT, encrypted_buffer_size, c->iv,
 					c->read_buff, c->decoded_buff);
 			LOGI(3, "aes_read enc: position: %"PRId64, position);
-			log_hex("aes_read enc: encoded[%d]: %s", c->read_buff,
-					encrypted_buffer_size);
-			log_hex("aes_read enc: decoded[%d]: %s", c->decoded_buff,
-					encrypted_buffer_size);
+			log_hex("aes_read enc: encoded[%d]: %s", (char*)c->read_buff, encrypted_buffer_size);
+			log_hex("aes_read enc: decoded[%d]: %s", (char*)c->decoded_buff, encrypted_buffer_size);
 		}
 		int delta = c->reading_position - c->read_start_point;
 		int copy_size = c->read_end_point - c->reading_position;
@@ -291,7 +289,7 @@ static int aes_read(URLContext *h, uint8_t *buf, int size) {
 		buf_position += copy_size;
 	}
 	LOGI(3, "aes_read read bytes: %d", buf_position);
-	log_hex("eas_read wrote to buffer[%d]: %s", buf, buf_position);
+	log_hex("eas_read wrote to buffer[%d]: %s", (char*)buf, buf_position);
 	LOGI(3, "aes_read write success");
 	return buf_position;
 }
