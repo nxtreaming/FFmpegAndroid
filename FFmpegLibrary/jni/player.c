@@ -136,10 +136,10 @@ typedef struct Player {
 
 	int rendering;
 
-	pthread_t thread_player_read_stream;
+	pthread_t read_stream_thread;
 	pthread_t decode_threads[MAX_STREAMS];
 
-	int thread_player_read_stream_created;
+	int read_stream_thread_created;
 	int decode_threads_created[MAX_STREAMS];
 
 	double audio_clock;
@@ -1541,13 +1541,13 @@ int player_start_decoding_threads(Player *player) {
 		player->decode_threads_created[i] = TRUE;
 	}
 
-	ret = pthread_create(&player->thread_player_read_stream, &attr,
+	ret = pthread_create(&player->read_stream_thread, &attr,
 			player_read_stream, player);
 	if (ret) {
 		err = -ERROR_COULD_NOT_CREATE_PTHREAD;
 		goto end;
 	}
-	player->thread_player_read_stream_created = TRUE;
+	player->read_stream_thread_created = TRUE;
 
 end:
 	ret = pthread_attr_destroy(&attr);
@@ -1560,12 +1560,11 @@ end:
 }
 
 int player_start_decoding_threads_free(Player *player) {
-	int err = 0;
-	int ret;
-	int i;
-	if (player->thread_player_read_stream_created) {
-		ret = pthread_join(player->thread_player_read_stream, NULL);
-		player->thread_player_read_stream_created = FALSE;
+	int i, ret, err = 0;
+
+	if (player->read_stream_thread_created) {
+		ret = pthread_join(player->read_stream_thread, NULL);
+		player->read_stream_thread_created = FALSE;
 		if (ret) {
 			err = ERROR_COULD_NOT_JOIN_PTHREAD;
 		}
