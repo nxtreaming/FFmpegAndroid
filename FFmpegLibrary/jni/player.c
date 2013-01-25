@@ -72,8 +72,6 @@
 
 //#define MEASURE_TIME
 
-#define MAX_STREAMS 2
-
 typedef struct Player {
 	JavaVM *get_javavm;
 
@@ -97,13 +95,12 @@ typedef struct Player {
 	AVFormatContext *format_ctx;
 	int input_inited;
 
-	int stream_index;
 	int video_stream_index;
 	int audio_stream_index;
-	AVStream *input_streams[MAX_STREAMS];
-	AVCodecContext * input_codec_ctxs[MAX_STREAMS];
-	int input_stream_numbers[MAX_STREAMS];
-	AVFrame *input_frames[MAX_STREAMS];
+	AVStream *input_streams[AVMEDIA_TYPE_NB];
+	AVCodecContext * input_codec_ctxs[AVMEDIA_TYPE_NB];
+	int input_stream_numbers[AVMEDIA_TYPE_NB];
+	AVFrame *input_frames[AVMEDIA_TYPE_NB];
 
 	enum PixelFormat out_format;
 
@@ -122,25 +119,25 @@ typedef struct Player {
 
 	pthread_mutex_t mutex_queue;
 	pthread_cond_t cond_queue;
-	Queue *packets_queue[MAX_STREAMS];
+	Queue *packets_queue[AVMEDIA_TYPE_NB];
 	Queue *rgb_video_queue;
 
 	int interrupt_renderer;
 	int pause;
 	int stop;
 	int seek_position;
-	int flush_streams[MAX_STREAMS];
+	int flush_streams[AVMEDIA_TYPE_NB];
 	int flush_video_play;
 
-	int stop_streams[MAX_STREAMS];
+	int stop_streams[AVMEDIA_TYPE_NB];
 
 	int rendering;
 
 	pthread_t read_stream_thread;
-	pthread_t decode_threads[MAX_STREAMS];
+	pthread_t decode_threads[AVMEDIA_TYPE_NB];
 
 	int read_stream_thread_created;
-	int decode_threads_created[MAX_STREAMS];
+	int decode_threads_created[AVMEDIA_TYPE_NB];
 
 	double audio_clock;
 	int64_t audio_write_time;
@@ -161,6 +158,7 @@ typedef struct State {
 
 typedef struct DecoderState {
 	int stream_index;
+	enum AVMediaType stream_type;
 	struct Player *player;
 	JNIEnv* env;
 	jobject thiz;
@@ -168,7 +166,7 @@ typedef struct DecoderState {
 
 typedef struct DecoderData {
 	struct Player *player;
-	int stream_index;
+	enum AVMediaType stream_type;
 } DecoderData;
 
 typedef struct VideoRGBFrameElem {
@@ -290,8 +288,8 @@ int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
 	Player *player = decoder_data->player;
 	int err = ERROR_NO_ERROR;
 	int ret;
-	AVCodecContext * c = player->input_codec_ctxs[decoder_data->stream_index];
-	AVStream *stream = player->input_streams[decoder_data->stream_index];
+	AVCodecContext * c = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
+	AVStream *stream = player->input_streams[AVMEDIA_TYPE_AUDIO];
 	LOGI(10, "player_write_audio Writing audio frame")
 
 	jbyteArray samples_byte_array = (*env)->NewByteArray(env, data_size);
@@ -347,11 +345,11 @@ end:
 QueueCheckFuncRet player_decode_queue_check(Queue *queue, DecoderData *decoderData, int *ret) {
 	Player *player = decoderData->player;
 
-	if (player->stop_streams[decoderData->stream_index]) {
+	if (player->stop_streams[decoderData->stream_type]) {
 		*ret = DECODE_CHECK_MSG_STOP;
 		return QUEUE_CHECK_FUNC_RET_SKIP;
 	}
-	if (player->flush_streams[decoderData->stream_index]) {
+	if (player->flush_streams[decoderData->stream_type]) {
 		*ret = DECODE_CHECK_MSG_FLUSH;
 		return QUEUE_CHECK_FUNC_RET_SKIP;
 	}
@@ -366,8 +364,8 @@ void player_decode_audio_flush(DecoderData * decoder_data, JNIEnv * env) {
 int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
 	int got_frame_ptr;
 	Player *player = decoder_data->player;
-	AVCodecContext * ctx = player->input_codec_ctxs[decoder_data->stream_index];
-	AVFrame * frame = player->input_frames[decoder_data->stream_index];
+	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
+	AVFrame *frame = player->input_frames[AVMEDIA_TYPE_AUDIO];
 
 	LOGI(3, "player_decode_audio decoding");
 	AVPacket *packet = packet_data->packet;
@@ -442,9 +440,9 @@ void player_decode_video_flush(DecoderData * decoder_data, JNIEnv * env) {
 
 int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
 	Player *player = decoder_data->player;
-	AVCodecContext * ctx = player->input_codec_ctxs[decoder_data->stream_index];
-	AVFrame * frame = player->input_frames[decoder_data->stream_index];
-	AVStream * stream = player->input_streams[decoder_data->stream_index];
+	AVCodecContext * ctx = player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO];
+	AVFrame * frame = player->input_frames[AVMEDIA_TYPE_VIDEO];
+	AVStream * stream = player->input_streams[AVMEDIA_TYPE_VIDEO];
 	int interrupt_ret;
 	int to_write;
 	VideoRGBFrameElem * elem;
@@ -615,14 +613,14 @@ void *player_decode(void * data) {
 	int err = ERROR_NO_ERROR;
 	DecoderData *decoder_data = data;
 	Player *player = decoder_data->player;
-	Queue *queue = player->packets_queue[decoder_data->stream_index];
-	AVCodecContext * ctx = player->input_codec_ctxs[decoder_data->stream_index];
+	Queue *queue = player->packets_queue[decoder_data->stream_type];
+	AVCodecContext * ctx = player->input_codec_ctxs[decoder_data->stream_type];
 	enum AVMediaType codec_type = ctx->codec_type;
 
 	int stop = FALSE;
 	JNIEnv * env;
 	char thread_title[256];
-	sprintf(thread_title, "FFmpegDecode[%d]", decoder_data->stream_index);
+	sprintf(thread_title, "FFmpegDecode[%d]", decoder_data->stream_type);
 
 	JavaVMAttachArgs thread_spec = { JNI_VERSION_1_4, thread_title, NULL };
 
@@ -634,7 +632,7 @@ void *player_decode(void * data) {
 	}
 
 	for (;;) {
-		LOGI(10, "player_decode waiting for frame[%d]", decoder_data->stream_index);
+		LOGI(10, "player_decode waiting for frame[%d]", decoder_data->stream_type);
 		int interrupt_ret;
 		PacketData *packet_data;
 		pthread_mutex_lock(&player->mutex_queue);
@@ -657,7 +655,7 @@ pop:
 			}
 		}
 		pthread_mutex_unlock(&player->mutex_queue);
-		LOGI(10, "player_decode decoding frame[%d]", decoder_data->stream_index);
+		LOGI(10, "player_decode decoding frame[%d]", decoder_data->stream_type);
 		if (packet_data->end_of_stream) {
 			LOGI(10, "player_decode read end of stream");
 		}
@@ -695,10 +693,10 @@ pop:
 		}
 		continue;
 stop:
-		LOGI(2, "player_decode stop[%d]", decoder_data->stream_index);
+		LOGI(2, "player_decode stop[%d]", decoder_data->stream_type);
 		stop = TRUE;
 flush:
-		LOGI(2, "player_decode flush[%d]", decoder_data->stream_index);
+		LOGI(2, "player_decode flush[%d]", decoder_data->stream_type);
 		PacketData *to_free; // FIXME move to PacketData
 		while ((to_free = queue_pop_start_impl_non_block(queue))
 				!= NULL) {
@@ -707,24 +705,24 @@ flush:
 			}
 			queue_pop_finish_impl(queue, &player->mutex_queue, &player->cond_queue);
 		}
-		LOGI(2, "player_decode flushing playback[%d]", decoder_data->stream_index);
+		LOGI(2, "player_decode flushing playback[%d]", decoder_data->stream_type);
 
 		if (codec_type == AVMEDIA_TYPE_AUDIO) {
 			player_decode_audio_flush(decoder_data, env);
 		} else if (codec_type == AVMEDIA_TYPE_VIDEO) {
 			player_decode_video_flush(decoder_data, env);
 		}
-		LOGI(2, "player_decode flushed playback[%d]", decoder_data->stream_index);
+		LOGI(2, "player_decode flushed playback[%d]", decoder_data->stream_type);
 
 		if (stop) {
 			LOGI(2, "player_decode stopping stream");
-			player->stop_streams[decoder_data->stream_index] = FALSE;
+			player->stop_streams[decoder_data->stream_type] = FALSE;
 			pthread_cond_broadcast(&player->cond_queue);
 			pthread_mutex_unlock(&player->mutex_queue);
 			goto detach_current_thread;
 		} else {
-			LOGI(2, "player_decode flush stream[%d]", decoder_data->stream_index);
-			player->flush_streams[decoder_data->stream_index] = FALSE;
+			LOGI(2, "player_decode flush stream[%d]", decoder_data->stream_type);
+			player->flush_streams[decoder_data->stream_type] = FALSE;
 			pthread_cond_broadcast(&player->cond_queue);
 			goto pop;
 		}
@@ -756,14 +754,15 @@ QueueCheckFuncRet player_read_stream_check(Queue *queue, Player *player, int *re
 
 static void player_assign_to_no_boolean_array(Player *player, int* array, int value) {
 	int i;
-	for (i = 0; i < player->stream_index; ++i) {
-		array[i] = value;
+	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
+		if (player->input_codec_ctxs[i])
+			array[i] = value;
 	}
 }
 static int player_if_all_no_array_elements_has_value(Player *player, int *array, int value) {
 	int i;
-	for (i = 0; i < player->stream_index; ++i) {
-		if (array[i] != value)
+	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
+		if (player->input_codec_ctxs[i] && array[i] != value)
 			return FALSE;
 	}
 	return TRUE;
@@ -797,7 +796,7 @@ void * player_read_stream(void *data) {
 		if (ret < 0) {
 			pthread_mutex_lock(&player->mutex_queue);
 			LOGI(3, "player_read_stream stream end");
-			queue = player->packets_queue[player->video_stream_index];
+			queue = player->packets_queue[AVMEDIA_TYPE_VIDEO];
 			packet_data = queue_push_start_impl(queue,
 				&player->mutex_queue, &player->cond_queue, &to_write,
 				(QueueCheckFunc) player_read_stream_check, player,
@@ -813,7 +812,7 @@ void * player_read_stream(void *data) {
 					assert(FALSE);
 				}
 			}
-			packet_data->end_of_stream = 1;
+			packet_data->end_of_stream = TRUE;
 			LOGI(3, "player_read_stream sending end_of_stream packet");
 			queue_push_finish_impl(queue, &player->mutex_queue, &player->cond_queue, to_write);
 			for (;;) {
@@ -839,7 +838,7 @@ void * player_read_stream(void *data) {
 parse_frame:
 		queue = NULL;
 		LOGI(3, "player_read_stream looking for stream")
-		for (i = 0; i < player->stream_index; ++i) {
+		for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 			if (packet.stream_index == player->input_stream_numbers[i]) {
 				queue = player->packets_queue[i];
 				LOGI(3, "player_read_stream stream found [%d]", i);
@@ -857,6 +856,7 @@ parse_frame:
 			(QueueCheckFunc) player_read_stream_check, player,
 			(void **)&interrupt_ret);
 		if (packet_data == NULL) {
+			LOGI(2, "player_read_stream queue interrupt");
 			if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_STOP) {
 				LOGI(2, "player_read_stream queue interrupt stop");
 			} else if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_SEEK) {
@@ -868,7 +868,7 @@ parse_frame:
 		}
 
 		pthread_mutex_unlock(&player->mutex_queue);
-		packet_data ->end_of_stream = FALSE;
+		packet_data->end_of_stream = FALSE;
 		*packet_data->packet = packet;
 
 		if (av_dup_packet(packet_data->packet) < 0) {
@@ -894,8 +894,9 @@ exit_loop:
 			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 
 		// flush internal buffers
-		for (i = 0; i < player->stream_index; ++i) {
-			avcodec_flush_buffers(player->input_codec_ctxs[i]);
+		for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
+			if (player->input_codec_ctxs[i])
+				avcodec_flush_buffers(player->input_codec_ctxs[i]);
 		}
 
 		pthread_mutex_unlock(&player->mutex_queue);
@@ -903,8 +904,8 @@ exit_loop:
 
 seek_loop:
 		// setting stream thet will be used as a base for seeking
-		seek_stream_index = player->input_stream_numbers[player->video_stream_index];
-		seek_stream = player->input_streams[player->video_stream_index];
+		seek_stream_index = player->input_stream_numbers[AVMEDIA_TYPE_VIDEO];
+		seek_stream = player->input_streams[AVMEDIA_TYPE_VIDEO];
 
 		// getting seek target time in time_base value
 		seek_target = av_rescale_q(AV_TIME_BASE * (int64_t) player->seek_position, AV_TIME_BASE_Q,
@@ -940,8 +941,9 @@ seek_loop:
 
 		LOGI(3, "player_read_stream flushing internal codec bffers");
 		// flush internal buffers
-		for (i = 0; i < player->stream_index; ++i) {
-			avcodec_flush_buffers(player->input_codec_ctxs[i]);
+		for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
+			if (player->input_codec_ctxs[i])
+				avcodec_flush_buffers(player->input_codec_ctxs[i]);
 		}
 
 		// finishing seeking
@@ -1006,9 +1008,9 @@ void *player_fill_video_rgb_frame(DecoderState *decoder_state) {
 	Player *player = decoder_state->player;
 	JNIEnv *env = decoder_state->env;
 	jobject thiz = decoder_state->thiz;
-	AVCodecContext * ctx = player->input_codec_ctxs[player->video_stream_index];
+	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO];
 
-	VideoRGBFrameElem * elem = malloc(sizeof(VideoRGBFrameElem));
+	VideoRGBFrameElem *elem = malloc(sizeof(VideoRGBFrameElem));
 	if (elem == NULL) {
 		LOGE(1,
 				"player_fill_video_rgb_frame could no allocate VideoRGBFrameEelem");
@@ -1090,93 +1092,22 @@ void player_update_time(State *state, double time) {
 	player_update_current_time(state, FALSE);
 }
 
-void player_open_stream_free(Player *player, int stream_index) {
-	AVCodecContext ** ctx = &player->input_codec_ctxs[stream_index];
+void player_open_stream_free(Player *player, int stream_type) {
+	AVCodecContext **ctx = &player->input_codec_ctxs[stream_type];
 	if (*ctx != NULL) {
 		avcodec_close(*ctx);
 		*ctx = NULL;
 	}
 }
 
-int player_open_stream(Player *player, AVCodecContext * ctx) {
-	enum AVCodecID codec_id = ctx->codec_id;
-	LOGI(3, "player_open_stream trying open: %d", codec_id);
-
-	AVCodec *codec = avcodec_find_decoder(codec_id);
-	if (codec == NULL) {
-		LOGE(1,
-				"player_set_data_source Could not find codec for id: %d", codec_id);
-		return -ERROR_COULD_NOT_FIND_VIDEO_CODEC;
-	}
-
-	if (avcodec_open2(ctx, codec, NULL) < 0) {
-		LOGE(1, "Could not open codec");
-		return -ERROR_COULD_NOT_OPEN_VIDEO_CODEC;
-	}
-
-	LOGI(3, "player_open_stream opened: %d", codec_id);
-	return 0;
-}
-
 void player_find_streams_free(Player *player) {
 	int i;
-	for (i = 0; i < player->stream_index; ++i) {
-		player_open_stream_free(player, i);
+	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
+		if (player->input_codec_ctxs[i])
+			player_open_stream_free(player, i);
 	}
-	player->stream_index = 0;
 	player->video_stream_index = -1;
 	player->audio_stream_index = -1;
-}
-
-int player_try_open_stream(Player *player, enum AVMediaType codec_type, int stream_index) {
-	if (stream_index < 0)
-		return -1;
-	if (stream_index >= player->format_ctx->nb_streams)
-		return -1;
-
-	AVStream *stream = player->format_ctx->streams[stream_index];
-	AVCodecContext *ctx = stream->codec;
-	if (ctx->codec_type != codec_type) {
-		return -1;
-	}
-	int err = player_open_stream(player, ctx);
-	if (err < 0) {
-		return -1;
-	}
-	return stream_index;
-}
-
-int player_find_stream(Player *player, enum AVMediaType codec_type, int recommended_stream_index) {
-	int streams_no = player->stream_index;
-	LOGI(3, "player_find_stream, type: %d", codec_type);
-	int bn_stream = player_try_open_stream(player, codec_type,
-			recommended_stream_index);
-	if (bn_stream < 0) {
-		int i;
-		for (i = 0; i < player->format_ctx->nb_streams; i++) {
-			bn_stream = player_try_open_stream(player, codec_type, i);
-			if (bn_stream >= 0)
-				break;
-		}
-	}
-
-	if (bn_stream < 0) {
-		return -1;
-	}
-
-	AVStream *stream = player->format_ctx->streams[bn_stream];
-	player->input_streams[streams_no] = stream;
-	player->input_codec_ctxs[streams_no] = stream->codec;
-	player->input_stream_numbers[streams_no] = bn_stream;
-
-	if (codec_type == AVMEDIA_TYPE_VIDEO) {
-		LOGI(5,
-				"player_set_data_source Video size is [%d x %d]",
-				player->input_codec_ctxs[streams_no]->width, player->input_codec_ctxs[streams_no]->height);
-	}
-
-	player->stream_index += 1;
-	return streams_no;
 }
 
 uint64_t player_find_layout_from_channels(int nb_channels) {
@@ -1295,7 +1226,7 @@ free_map_class:
 
 int player_alloc_frames_free(Player *player) {
 	int i;
-	for (i = 0; i < player->stream_index; ++i) {
+	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 		if (player->input_frames[i] != NULL) {
 			av_freep(&player->input_frames[i]);
 		}
@@ -1305,10 +1236,12 @@ int player_alloc_frames_free(Player *player) {
 
 int player_alloc_frames(Player *player) {
 	int i;
-	for (i = 0; i < player->stream_index; ++i) {
-		player->input_frames[i] = avcodec_alloc_frame();
-		if (player->input_frames[i] == NULL) {
-			return -ERROR_COULD_NOT_ALLOC_FRAME;
+	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
+		if (player->input_codec_ctxs[i]) {
+			player->input_frames[i] = avcodec_alloc_frame();
+			if (player->input_frames[i] == NULL) {
+				return -ERROR_COULD_NOT_ALLOC_FRAME;
+			}
 		}
 	}
 	return 0;
@@ -1317,13 +1250,15 @@ int player_alloc_frames(Player *player) {
 int player_alloc_queues(State *state) {
 	Player *player = state->player;
 	int i;
-	for (i = 0; i < player->stream_index; ++i) {
-		player->packets_queue[i] = queue_init_with_custom_lock(100,
-			(queue_fill_func) player_fill_packet,
-			(queue_free_func) player_free_packet, state, state,
-			&player->mutex_queue, &player->cond_queue);
-		if (player->packets_queue[i] == NULL) {
-			return -ERROR_COULD_NOT_PREPARE_PACKETS_QUEUE;
+	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
+		if (player->input_codec_ctxs[i]) {
+			player->packets_queue[i] = queue_init_with_custom_lock(100,
+				(queue_fill_func) player_fill_packet,
+				(queue_free_func) player_free_packet, state, state,
+				&player->mutex_queue, &player->cond_queue);
+			if (player->packets_queue[i] == NULL) {
+				return -ERROR_COULD_NOT_PREPARE_PACKETS_QUEUE;
+			}
 		}
 	}
 	return 0;
@@ -1332,7 +1267,7 @@ int player_alloc_queues(State *state) {
 void player_alloc_queues_free(State *state) {
 	Player *player = state->player;
 	int i;
-	for (i = 0; i < player->stream_index; ++i) {
+	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 		if (player->packets_queue[i] != NULL) {
 			queue_free(player->packets_queue[i], &player->mutex_queue, &player->cond_queue, state);
 			player->packets_queue[i] = NULL;
@@ -1364,7 +1299,7 @@ int player_prepare_rgb_frames(DecoderState *decoder_state, State *state) {
 }
 
 int player_preapre_sws_context(Player *player) {
-	AVCodecContext * ctx = player->input_codec_ctxs[player->video_stream_index];
+	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO];
 	int destWidth = ctx->width;
 	int destHeight = ctx->height;
 
@@ -1399,7 +1334,7 @@ void player_create_audio_track_free(Player *player, State *state) {
 		player->audio_track = NULL;
 	}
 	if (player->audio_stream_index >= 0) {
-		AVCodecContext ** ctx = &player->input_codec_ctxs[player->audio_stream_index];
+		AVCodecContext **ctx = &player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
 		if (*ctx != NULL) {
 			LOGI(7, "player_set_data_sourceclose_audio_codec");
 			avcodec_close(*ctx);
@@ -1410,7 +1345,7 @@ void player_create_audio_track_free(Player *player, State *state) {
 
 int player_create_audio_track(Player *player, State *state) {
 	//creating audio track
-	AVCodecContext * ctx = player->input_codec_ctxs[player->audio_stream_index];
+	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
 	int sample_rate = ctx->sample_rate;
 	int channels = ctx->channels;
 
@@ -1476,9 +1411,9 @@ void player_get_video_duration(Player *player) {
 	player->video_duration = 0;
 	int i;
 
-	for (i = 0; i < player->stream_index; ++i) {
+	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 		AVStream *stream = player->input_streams[i];
-		if (stream->duration > 0) {
+		if (stream && stream->duration > 0) {
 			player->video_duration = round(stream->duration * av_q2d(stream->time_base));
 			LOGI(3,
 					"player_set_data_source stream[%d] duration: %lld", i, stream->duration);
@@ -1515,16 +1450,18 @@ int player_start_decoding_threads(Player *player) {
 		err = -ERROR_COULD_NOT_INIT_PTHREAD_ATTR;
 		goto end;
 	}
-	for (i = 0; i < player->stream_index; ++i) {
-		DecoderData * decoder_data = malloc(sizeof(decoder_data));
-		*decoder_data = (DecoderData) {player, i};
-		ret = pthread_create(&player->decode_threads[i], &attr, player_decode,
+	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
+		if (player->input_codec_ctxs[i]) {
+			DecoderData *decoder_data = malloc(sizeof(decoder_data));
+			*decoder_data = (DecoderData) {player, (enum AVMediaType)i};
+			ret = pthread_create(&player->decode_threads[i], &attr, player_decode,
 				decoder_data);
-		if (ret) {
-			err = -ERROR_COULD_NOT_CREATE_PTHREAD;
-			goto end;
+			if (ret) {
+				err = -ERROR_COULD_NOT_CREATE_PTHREAD;
+				goto end;
+			}
+			player->decode_threads_created[i] = TRUE;
 		}
-		player->decode_threads_created[i] = TRUE;
 	}
 
 	ret = pthread_create(&player->read_stream_thread, &attr,
@@ -1556,7 +1493,7 @@ int player_start_decoding_threads_free(Player *player) {
 		}
 	}
 
-	for (i = 0; i < player->stream_index; ++i) {
+	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 		if (player->decode_threads_created[i]) {
 			ret = pthread_join(player->decode_threads[i], NULL);
 			player->decode_threads_created[i] = FALSE;
@@ -1666,11 +1603,71 @@ void player_stop(State * state) {
 	pthread_mutex_unlock(&state->player->mutex_operation);
 }
 
+static int stream_component_open(Player *player, int stream_index) {
+	AVFormatContext *ic = player->format_ctx;
+	AVStream *st;
+	AVCodecContext *avctx;
+	AVCodec *codec;
+	int channels = -1, sample_rate = -1, frame_size = -1;
+
+	if (stream_index < 0 || stream_index > ic->nb_streams)
+		return -1;
+
+	st = ic->streams[stream_index];
+	avctx = st->codec;
+	codec = avcodec_find_decoder(avctx->codec_id);
+	if (!codec) {
+		LOGI(1, "No codec could be found with id %d", avctx->codec_id);
+		return -1;
+	}
+
+	st->discard = AVDISCARD_DEFAULT;
+	switch(avctx->codec_type) {
+	case AVMEDIA_TYPE_AUDIO:
+		player->audio_stream_index = stream_index;
+		player->input_streams[AVMEDIA_TYPE_AUDIO] = st;
+		player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO] = avctx;
+		player->input_stream_numbers[AVMEDIA_TYPE_AUDIO] = stream_index;
+		channels    = avctx->channels;
+		sample_rate = avctx->sample_rate;
+		frame_size  = avctx->frame_size;
+		break;
+	case AVMEDIA_TYPE_VIDEO:
+		player->video_stream_index = stream_index;
+		player->input_streams[AVMEDIA_TYPE_VIDEO] = st;
+		player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO] = avctx;
+		player->input_stream_numbers[AVMEDIA_TYPE_VIDEO] = stream_index;
+		break;
+	default:
+		break;
+	}
+
+	//TODO: setup |avctx| options
+	if (avctx->lowres)
+		avctx->flags |= CODEC_FLAG_EMU_EDGE;
+	if (codec->capabilities & CODEC_CAP_DR1)
+		avctx->flags |= CODEC_FLAG_EMU_EDGE;
+	if (avcodec_open2(avctx, codec, NULL) < 0)
+		return -1;
+	if (avctx->codec_type == AVMEDIA_TYPE_AUDIO) {
+		/* |avcodec_open2()| could break audio codec settings */
+		if (avctx->channels <= 0)
+			avctx->channels = channels;
+		if (avctx->sample_rate <= 0)
+			avctx->sample_rate = sample_rate;
+		if (avctx->frame_size <= 0)
+			avctx->frame_size = frame_size;
+	}
+	return 0;
+}
+
 int player_set_data_source(State *state, const char *file_path,
 		AVDictionary *dictionary, int video_stream_index, int audio_stream_index,
 		int subtitle_stream_index) {
 	Player *player = state->player;
-	int err = ERROR_NO_ERROR;
+	AVFormatContext *ic;
+	int st_index[AVMEDIA_TYPE_NB];
+	int i, err = ERROR_NO_ERROR;
 
 	pthread_mutex_lock(&player->mutex_operation);
 
@@ -1683,6 +1680,11 @@ int player_set_data_source(State *state, const char *file_path,
 	player->out_format = AV_PIX_FMT_RGB565;
 	player->pause = TRUE;
 	player->audio_pause_time = player->audio_resume_time = av_gettime();
+	memset(player->input_stream_numbers, -1, sizeof(player->input_stream_numbers));
+	player->input_stream_numbers[AVMEDIA_TYPE_VIDEO   ] = video_stream_index;
+	player->input_stream_numbers[AVMEDIA_TYPE_AUDIO   ] = audio_stream_index;
+	player->input_stream_numbers[AVMEDIA_TYPE_SUBTITLE] = subtitle_stream_index;
+	memset(st_index, -1, sizeof(st_index));
 
 	// trying decode video
 	if ((err = player_create_context(player)) < 0)
@@ -1698,17 +1700,19 @@ int player_set_data_source(State *state, const char *file_path,
 			player)) < 0)
 		goto error;
 
-	if ((player->video_stream_index = player_find_stream(player,
-			AVMEDIA_TYPE_VIDEO, video_stream_index)) < 0) {
-		err = player->video_stream_index;
-		goto error;
+	ic = player->format_ctx;
+	for (i=0; i<ic->nb_streams; i++) {
+		ic->streams[i]->discard = AVDISCARD_ALL;
 	}
+	st_index[AVMEDIA_TYPE_VIDEO] = av_find_best_stream(ic, AVMEDIA_TYPE_VIDEO,
+		player->input_stream_numbers[AVMEDIA_TYPE_VIDEO], -1, NULL, 0);
+	st_index[AVMEDIA_TYPE_AUDIO] = av_find_best_stream(ic, AVMEDIA_TYPE_AUDIO,
+		player->input_stream_numbers[AVMEDIA_TYPE_AUDIO], -1, NULL, 0);
 
-	if ((player->audio_stream_index = player_find_stream(player,
-			AVMEDIA_TYPE_AUDIO, audio_stream_index)) < 0) {
-		err = player->audio_stream_index;
-		goto error;
-	}
+	if (st_index[AVMEDIA_TYPE_AUDIO] >= 0)
+		stream_component_open(player, st_index[AVMEDIA_TYPE_AUDIO]);
+	if (st_index[AVMEDIA_TYPE_VIDEO] >= 0)
+		stream_component_open(player, st_index[AVMEDIA_TYPE_VIDEO]);
 
 	if ((err = player_alloc_frames(player)) < 0)
 		goto error;
@@ -1716,7 +1720,7 @@ int player_set_data_source(State *state, const char *file_path,
 	if ((err = player_alloc_queues(state)) < 0)
 		goto error;
 
-	DecoderState video_decoder_state = { player->video_stream_index, player, state->env, state->thiz };
+	DecoderState video_decoder_state = { player->video_stream_index, AVMEDIA_TYPE_VIDEO, player, state->env, state->thiz };
 	if ((err = player_prepare_rgb_frames(&video_decoder_state, state)) < 0)
 		goto error;
 
