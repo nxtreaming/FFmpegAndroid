@@ -96,7 +96,7 @@ typedef struct Player {
 	int audio_index;
 	AVStream *input_streams[AVMEDIA_TYPE_NB];
 	AVCodecContext *input_codec_ctxs[AVMEDIA_TYPE_NB];
-	int input_stream_numbers[AVMEDIA_TYPE_NB];
+	int stream_indexs[AVMEDIA_TYPE_NB];
 	AVFrame *input_frames[AVMEDIA_TYPE_NB];
 
 	enum PixelFormat out_format;
@@ -848,7 +848,7 @@ parse_frame:
 		queue = NULL;
 		LOGI(10, "player_read_stream looking for stream")
 		for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
-			if (packet.stream_index == player->input_stream_numbers[i]) {
+			if (packet.stream_index == player->stream_indexs[i]) {
 				queue = player->packets_queue[i];
 				LOGI(10, "player_read_stream stream found [%d]", i);
 				break;
@@ -915,7 +915,7 @@ exit_loop:
 
 seek_loop:
 		// setting stream thet will be used as a base for seeking
-		seek_stream_index = player->input_stream_numbers[AVMEDIA_TYPE_VIDEO];
+		seek_stream_index = player->stream_indexs[AVMEDIA_TYPE_VIDEO];
 		seek_stream = player->input_streams[AVMEDIA_TYPE_VIDEO];
 
 		// getting seek target time in time_base value
@@ -1634,7 +1634,7 @@ static int stream_component_open(Player *player, int stream_index) {
 		player->audio_index = stream_index;
 		player->input_streams[AVMEDIA_TYPE_AUDIO] = st;
 		player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO] = avctx;
-		player->input_stream_numbers[AVMEDIA_TYPE_AUDIO] = stream_index;
+		player->stream_indexs[AVMEDIA_TYPE_AUDIO] = stream_index;
 		channels    = avctx->channels;
 		sample_rate = avctx->sample_rate;
 		frame_size  = avctx->frame_size;
@@ -1643,7 +1643,7 @@ static int stream_component_open(Player *player, int stream_index) {
 		player->video_index = stream_index;
 		player->input_streams[AVMEDIA_TYPE_VIDEO] = st;
 		player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO] = avctx;
-		player->input_stream_numbers[AVMEDIA_TYPE_VIDEO] = stream_index;
+		player->stream_indexs[AVMEDIA_TYPE_VIDEO] = stream_index;
 		break;
 	default:
 		break;
@@ -1687,10 +1687,10 @@ int player_set_data_source(State *state, const char *file_path,
 	player->out_format = AV_PIX_FMT_RGB565;
 	player->pause = TRUE;
 	player->audio_pause_time = player->audio_resume_time = av_gettime();
-	memset(player->input_stream_numbers, -1, sizeof(player->input_stream_numbers));
-	player->input_stream_numbers[AVMEDIA_TYPE_VIDEO   ] = video_index;
-	player->input_stream_numbers[AVMEDIA_TYPE_AUDIO   ] = audio_index;
-	player->input_stream_numbers[AVMEDIA_TYPE_SUBTITLE] = subtitle_index;
+	memset(player->stream_indexs, -1, sizeof(player->stream_indexs));
+	player->stream_indexs[AVMEDIA_TYPE_VIDEO   ] = video_index;
+	player->stream_indexs[AVMEDIA_TYPE_AUDIO   ] = audio_index;
+	player->stream_indexs[AVMEDIA_TYPE_SUBTITLE] = subtitle_index;
 	memset(st_index, -1, sizeof(st_index));
 
 	// trying decode video
@@ -1712,9 +1712,9 @@ int player_set_data_source(State *state, const char *file_path,
 		ic->streams[i]->discard = AVDISCARD_ALL;
 	}
 	st_index[AVMEDIA_TYPE_VIDEO] = av_find_best_stream(ic, AVMEDIA_TYPE_VIDEO,
-		player->input_stream_numbers[AVMEDIA_TYPE_VIDEO], -1, NULL, 0);
+		player->stream_indexs[AVMEDIA_TYPE_VIDEO], -1, NULL, 0);
 	st_index[AVMEDIA_TYPE_AUDIO] = av_find_best_stream(ic, AVMEDIA_TYPE_AUDIO,
-		player->input_stream_numbers[AVMEDIA_TYPE_AUDIO], -1, NULL, 0);
+		player->stream_indexs[AVMEDIA_TYPE_AUDIO], -1, NULL, 0);
 
 	if (st_index[AVMEDIA_TYPE_AUDIO] >= 0)
 		stream_component_open(player, st_index[AVMEDIA_TYPE_AUDIO]);
