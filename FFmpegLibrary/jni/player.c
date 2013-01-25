@@ -794,7 +794,7 @@ void * player_read_stream(void *data) {
 	jint ret = (*player->get_javavm)->AttachCurrentThread(player->get_javavm, &env, &thread_spec);
 	if (ret) {
 		err = ERROR_COULD_NOT_ATTACH_THREAD;
-		return NULL;
+		goto end;
 	}
 
 	for (;;) {
@@ -838,7 +838,6 @@ void * player_read_stream(void *data) {
 		pthread_mutex_lock(&player->mutex_queue);
 		if (player->stop) {
 			LOGI(4, "player_read_stream stopping");
-			av_free_packet(pkt);
 			goto exit_loop;
 		}
 		if (player->seek_position != DO_NOT_SEEK) {
@@ -858,9 +857,7 @@ parse_frame:
 
 		if (queue == NULL) {
 			LOGI(3, "player_read_stream stream not found");
-			av_free_packet(pkt);
-			pthread_mutex_unlock(&player->mutex_queue);
-			continue;
+			goto skip_loop;
 		}
 
 		LOGI(10, "player_read_stream waiting for queue");
@@ -871,7 +868,6 @@ parse_frame:
 		if (packet_data == NULL) {
 			if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_STOP) {
 				LOGI(2, "player_read_stream queue interrupt stop");
-				av_free_packet(pkt);
 				goto exit_loop;
 			} else if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_SEEK) {
 				LOGI(2, "player_read_stream queue interrupt seek");
@@ -888,7 +884,6 @@ parse_frame:
 		if (av_dup_packet(packet_data->packet) < 0) {
 			err = ERROR_WHILE_DUPLICATING_FRAME;
 			pthread_mutex_lock(&player->mutex_queue);
-			av_free_packet(pkt);
 			goto exit_loop;
 		}
 
@@ -897,6 +892,8 @@ parse_frame:
 
 exit_loop:
 		LOGI(3, "player_read_stream stop");
+		av_free_packet(pkt);
+
 		//request stream to stop
 		player_assign_to_no_boolean_array(player, player->stop_streams, TRUE);
 		pthread_cond_broadcast(&player->cond_queue);
@@ -917,7 +914,7 @@ exit_loop:
 		goto detach_current_thread;
 
 seek_loop:
-		// setting stream which will be used as a base for seeking
+		// setting stream thet will be used as a base for seeking
 		seek_stream_index = player->stream_indexs[AVMEDIA_TYPE_VIDEO];
 		seek_stream = player->input_streams[AVMEDIA_TYPE_VIDEO];
 
@@ -964,6 +961,10 @@ seek_loop:
 		player->seek_position = DO_NOT_SEEK;
 		pthread_cond_broadcast(&player->cond_queue);
 		LOGI(3, "player_read_stream ending seek");
+
+skip_loop:
+		av_free_packet(pkt);
+		pthread_mutex_unlock(&player->mutex_queue);
 	}
 
 detach_current_thread:
@@ -971,6 +972,8 @@ detach_current_thread:
 			player->get_javavm);
 	if (ret && !err)
 		err = ERROR_COULD_NOT_DETACH_THREAD;
+end:
+	// TODO do something with error value
 	return NULL;
 }
 
