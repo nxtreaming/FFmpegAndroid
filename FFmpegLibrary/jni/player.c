@@ -54,7 +54,7 @@
 #include "jni-protocol.h"
 #include "aes-protocol.h"
 
-#define LOG_LEVEL 2
+#define LOG_LEVEL 3
 #define LOG_TAG "AVEngine:player.c"
 #define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
 #define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
@@ -63,11 +63,8 @@
 #define FALSE 0
 #define TRUE (!(FALSE))
 
-#define DO_NOT_SEEK (-1)
+#define DO_NOT_SEEK (0xdeadbeef)
 
-// 1000000 us = 1s
-#define MIN_SLEEP_TIME_US 10000
-// 1000 ms = 1s
 #define MIN_SLEEP_TIME_MS 2
 
 //#define MEASURE_TIME
@@ -367,7 +364,7 @@ int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketData *pa
 	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
 	AVFrame *frame = player->input_frames[AVMEDIA_TYPE_AUDIO];
 
-	LOGI(3, "player_decode_audio decoding");
+	LOGI(10, "player_decode_audio decoding");
 	AVPacket *packet = packet_data->packet;
 	int len = avcodec_decode_audio4(ctx, frame, &got_frame_ptr, packet);
 	if (len < 0) {
@@ -375,7 +372,7 @@ int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketData *pa
 		return -ERROR_WHILE_DECODING_VIDEO;
 	}
 	if (!got_frame_ptr) {
-		LOGI(10, "player_decode_audio Audio frame not finished\n");
+		LOGI(3, "player_decode_audio Audio frame not finished\n");
 		return 0;
 	}
 
@@ -637,7 +634,7 @@ void *player_decode(void * data) {
 		PacketData *packet_data;
 		pthread_mutex_lock(&player->mutex_queue);
 pop:
-		while (player->pause) {
+		while (player->pause && !player->stop) {
 			// we try to sleep 10ms
 			pthread_cond_timeout_np(&player->cond_queue, &player->mutex_queue, 10);
 		}
@@ -837,11 +834,12 @@ void * player_read_stream(void *data) {
 
 parse_frame:
 		queue = NULL;
-		LOGI(3, "player_read_stream looking for stream")
+		LOGI(10, "player_read_stream looking for stream")
 		for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 			if (packet.stream_index == player->input_stream_numbers[i]) {
 				queue = player->packets_queue[i];
-				LOGI(3, "player_read_stream stream found [%d]", i);
+				LOGI(10, "player_read_stream stream found [%d]", i);
+				break;
 			}
 		}
 
@@ -856,15 +854,15 @@ parse_frame:
 			(QueueCheckFunc) player_read_stream_check, player,
 			(void **)&interrupt_ret);
 		if (packet_data == NULL) {
-			LOGI(2, "player_read_stream queue interrupt");
 			if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_STOP) {
 				LOGI(2, "player_read_stream queue interrupt stop");
+				goto exit_loop;
 			} else if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_SEEK) {
 				LOGI(2, "player_read_stream queue interrupt seek");
+				goto seek_loop;
 			} else {
 				assert(FALSE);
 			}
-			goto seek_loop;
 		}
 
 		pthread_mutex_unlock(&player->mutex_queue);
@@ -892,6 +890,7 @@ exit_loop:
 		while (!player_if_all_no_array_elements_has_value(player,
 				player->stop_streams, FALSE))
 			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
+		LOGI(3, "player_read_stream stopped");
 
 		// flush internal buffers
 		for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
@@ -1556,7 +1555,7 @@ int player_find_stream_info(Player *player) {
 	return ERROR_NO_ERROR;
 }
 
-void player_play_prepare_free(Player *player) {
+static void player_signal_stop(Player *player) {
 	pthread_mutex_lock(&player->mutex_queue);
 	player->stop = TRUE;
 	pthread_cond_broadcast(&player->cond_queue);
@@ -1582,9 +1581,8 @@ void player_stop_impl(State * state) {
 		return;
 	player->playing = FALSE;
 
-	LOGI(7, "player_stop_impl stopping...");
-
-	player_play_prepare_free(player);
+	LOGI(3, "player_stop_impl stopping...");
+	player_signal_stop(player);
 	player_start_decoding_threads_free(player);
 	player_create_audio_track_free(player, state);
 	player_preapre_sws_context_free(player);
@@ -1595,9 +1593,11 @@ void player_stop_impl(State * state) {
 	player_find_streams_free(player);
 	player_open_input_free(player);
 	player_create_context_free(player);
+	LOGI(3, "player_stop_impl stopped...");
 }
 
 void player_stop(State * state) {
+	LOGI(3, "player_stop stopping...");
 	pthread_mutex_lock(&state->player->mutex_operation);
 	player_stop_impl(state);
 	pthread_mutex_unlock(&state->player->mutex_operation);
@@ -1747,7 +1747,7 @@ int player_set_data_source(State *state, const char *file_path,
 error:
 	LOGI(3, "player_set_data_source error");
 
-	player_play_prepare_free(player);
+	player_signal_stop(player);
 	player_start_decoding_threads_free(player);
 	player_create_audio_track_free(player, state);
 	player_preapre_sws_context_free(player);
@@ -2066,7 +2066,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 	player->stop = TRUE;
 	player->flush_video_play = FALSE;
 
-	av_log_set_level(AV_LOG_DEBUG);
+	av_log_set_level(AV_LOG_WARNING);
 	avformat_network_init();
 	av_register_all();
 	register_jni_protocol(player->get_javavm);
