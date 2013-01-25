@@ -794,7 +794,7 @@ void * player_read_stream(void *data) {
 	jint ret = (*player->get_javavm)->AttachCurrentThread(player->get_javavm, &env, &thread_spec);
 	if (ret) {
 		err = ERROR_COULD_NOT_ATTACH_THREAD;
-		goto end;
+		return NULL;
 	}
 
 	for (;;) {
@@ -838,6 +838,7 @@ void * player_read_stream(void *data) {
 		pthread_mutex_lock(&player->mutex_queue);
 		if (player->stop) {
 			LOGI(4, "player_read_stream stopping");
+			av_free_packet(pkt);
 			goto exit_loop;
 		}
 		if (player->seek_position != DO_NOT_SEEK) {
@@ -870,6 +871,7 @@ parse_frame:
 		if (packet_data == NULL) {
 			if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_STOP) {
 				LOGI(2, "player_read_stream queue interrupt stop");
+				av_free_packet(pkt);
 				goto exit_loop;
 			} else if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_SEEK) {
 				LOGI(2, "player_read_stream queue interrupt seek");
@@ -886,6 +888,7 @@ parse_frame:
 		if (av_dup_packet(packet_data->packet) < 0) {
 			err = ERROR_WHILE_DUPLICATING_FRAME;
 			pthread_mutex_lock(&player->mutex_queue);
+			av_free_packet(pkt);
 			goto exit_loop;
 		}
 
@@ -894,8 +897,6 @@ parse_frame:
 
 exit_loop:
 		LOGI(3, "player_read_stream stop");
-		av_free_packet(pkt);
-
 		//request stream to stop
 		player_assign_to_no_boolean_array(player, player->stop_streams, TRUE);
 		pthread_cond_broadcast(&player->cond_queue);
@@ -970,8 +971,6 @@ detach_current_thread:
 			player->get_javavm);
 	if (ret && !err)
 		err = ERROR_COULD_NOT_DETACH_THREAD;
-end:
-	// TODO do something with error value
 	return NULL;
 }
 
