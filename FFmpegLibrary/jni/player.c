@@ -98,7 +98,7 @@ typedef struct Player {
 	int video_stream_index;
 	int audio_stream_index;
 	AVStream *input_streams[AVMEDIA_TYPE_NB];
-	AVCodecContext * input_codec_ctxs[AVMEDIA_TYPE_NB];
+	AVCodecContext *input_codec_ctxs[AVMEDIA_TYPE_NB];
 	int input_stream_numbers[AVMEDIA_TYPE_NB];
 	AVFrame *input_frames[AVMEDIA_TYPE_NB];
 
@@ -288,7 +288,7 @@ int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
 	Player *player = decoder_data->player;
 	int err = ERROR_NO_ERROR;
 	int ret;
-	AVCodecContext * c = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
+	AVCodecContext *c = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
 	AVStream *stream = player->input_streams[AVMEDIA_TYPE_AUDIO];
 	LOGI(10, "player_write_audio Writing audio frame")
 
@@ -440,9 +440,9 @@ void player_decode_video_flush(DecoderData * decoder_data, JNIEnv * env) {
 
 int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
 	Player *player = decoder_data->player;
-	AVCodecContext * ctx = player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO];
-	AVFrame * frame = player->input_frames[AVMEDIA_TYPE_VIDEO];
-	AVStream * stream = player->input_streams[AVMEDIA_TYPE_VIDEO];
+	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO];
+	AVFrame *frame = player->input_frames[AVMEDIA_TYPE_VIDEO];
+	AVStream *stream = player->input_streams[AVMEDIA_TYPE_VIDEO];
 	int interrupt_ret;
 	int to_write;
 	VideoRGBFrameElem * elem;
@@ -614,7 +614,7 @@ void *player_decode(void * data) {
 	DecoderData *decoder_data = data;
 	Player *player = decoder_data->player;
 	Queue *queue = player->packets_queue[decoder_data->stream_type];
-	AVCodecContext * ctx = player->input_codec_ctxs[decoder_data->stream_type];
+	AVCodecContext *ctx = player->input_codec_ctxs[decoder_data->stream_type];
 	enum AVMediaType codec_type = ctx->codec_type;
 
 	int stop = FALSE;
