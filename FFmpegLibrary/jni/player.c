@@ -636,11 +636,21 @@ void *player_decode(void * data) {
 		pthread_mutex_lock(&player->mutex_queue);
 pop:
 		has_sleep = 0;
+		interrupt_ret = -1;
 		while (player->pause && !player->stop) {
 			// we try to sleep 10ms
 			if (!has_sleep) {
 				LOGI(3, "player_decode[%d] enter sleep...", decoder_data->stream_type);
 				has_sleep = 1;
+			}
+			player_decode_queue_check(queue, decoder_data, &interrupt_ret);
+			// MUST wake up from PAUSE --> SEEK/STOP
+			if (interrupt_ret == DECODE_CHECK_MSG_FLUSH) {
+				LOGI(3, "player_decode[%d] interrupted by FLUSH from PAUSE", decoder_data->stream_type);
+				goto flush;
+			} else if (interrupt_ret == DECODE_CHECK_MSG_STOP) {
+				LOGI(3, "player_decode[%d] interrupted by STOP from PAUSE", decoder_data->stream_type);
+				goto stop;
 			}
 			pthread_cond_timeout_np(&player->cond_queue, &player->mutex_queue, 10);
 		}
@@ -945,8 +955,7 @@ seek_loop:
 		LOGI(3, "player_read_stream waiting for flush");
 
 		// waiting for all stream flush
-		// if player has been paused, it will fail to receive any |cond_queue|
-		while (!player->pause && !player_if_all_no_array_elements_has_value(player,
+		while (!player_if_all_no_array_elements_has_value(player,
 				player->flush_streams, FALSE))
 			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 
