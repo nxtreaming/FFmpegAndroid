@@ -54,7 +54,7 @@
 #include "jni-protocol.h"
 #include "aes-protocol.h"
 
-#define LOG_LEVEL 3
+#define LOG_LEVEL 1
 #define LOG_TAG "AVEngine:player.c"
 #define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
 #define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
