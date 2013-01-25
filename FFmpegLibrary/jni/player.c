@@ -629,32 +629,43 @@ void *player_decode(void * data) {
 	}
 
 	for (;;) {
-		LOGI(10, "player_decode waiting for frame[%d]", decoder_data->stream_type);
+		LOGI(10, "player_decode[%d] waiting for frame", decoder_data->stream_type);
 		int interrupt_ret;
 		PacketData *packet_data;
+		int has_sleep;
 		pthread_mutex_lock(&player->mutex_queue);
 pop:
+		has_sleep = 0;
 		while (player->pause && !player->stop) {
 			// we try to sleep 10ms
+			if (!has_sleep) {
+				LOGI(3, "player_decode[%d] enter sleep...", decoder_data->stream_type);
+				has_sleep = 1;
+			}
 			pthread_cond_timeout_np(&player->cond_queue, &player->mutex_queue, 10);
 		}
+		if (has_sleep)
+			LOGI(3, "player_decode[%d] wake up...", decoder_data->stream_type);
+
 		packet_data = queue_pop_start_impl(&queue,
 			&player->mutex_queue, &player->cond_queue,
 			(QueueCheckFunc) player_decode_queue_check, decoder_data,
 			(void **) &interrupt_ret);
 		if (packet_data == NULL) {
 			if (interrupt_ret == DECODE_CHECK_MSG_FLUSH) {
+				LOGI(3, "player_decode[%d] interrupted by FLUSH", decoder_data->stream_type);
 				goto flush;
 			} else if (interrupt_ret == DECODE_CHECK_MSG_STOP) {
+				LOGI(3, "player_decode[%d] interrupted by STOP", decoder_data->stream_type);
 				goto stop;
 			} else {
 				assert(FALSE);
 			}
 		}
 		pthread_mutex_unlock(&player->mutex_queue);
-		LOGI(10, "player_decode decoding frame[%d]", decoder_data->stream_type);
+		LOGI(10, "player_decode[%d] decoding frame", decoder_data->stream_type);
 		if (packet_data->end_of_stream) {
-			LOGI(10, "player_decode read end of stream");
+			LOGI(10, "player_decode[%d] read end of stream", decoder_data->stream_type);
 		}
 
 #ifdef MEASURE_TIME
@@ -690,10 +701,10 @@ pop:
 		}
 		continue;
 stop:
-		LOGI(2, "player_decode stop[%d]", decoder_data->stream_type);
+		LOGI(2, "player_decode[%d] stop", decoder_data->stream_type);
 		stop = TRUE;
 flush:
-		LOGI(2, "player_decode flush[%d]", decoder_data->stream_type);
+		LOGI(2, "player_decode[%d] flush", decoder_data->stream_type);
 		PacketData *to_free; // FIXME move to PacketData
 		while ((to_free = queue_pop_start_impl_non_block(queue))
 				!= NULL) {
@@ -702,23 +713,23 @@ flush:
 			}
 			queue_pop_finish_impl(queue, &player->mutex_queue, &player->cond_queue);
 		}
-		LOGI(2, "player_decode flushing playback[%d]", decoder_data->stream_type);
+		LOGI(2, "player_decode[%d] flushing", decoder_data->stream_type);
 
 		if (codec_type == AVMEDIA_TYPE_AUDIO) {
 			player_decode_audio_flush(decoder_data, env);
 		} else if (codec_type == AVMEDIA_TYPE_VIDEO) {
 			player_decode_video_flush(decoder_data, env);
 		}
-		LOGI(2, "player_decode flushed playback[%d]", decoder_data->stream_type);
+		LOGI(2, "player_decode[%d] flushed", decoder_data->stream_type);
 
 		if (stop) {
-			LOGI(2, "player_decode stopping stream");
+			LOGI(2, "player_decode[%d] signal stop", decoder_data->stream_type);
 			player->stop_streams[decoder_data->stream_type] = FALSE;
 			pthread_cond_broadcast(&player->cond_queue);
 			pthread_mutex_unlock(&player->mutex_queue);
 			goto detach_current_thread;
 		} else {
-			LOGI(2, "player_decode flush stream[%d]", decoder_data->stream_type);
+			LOGI(2, "player_decode[%d] signal flush", decoder_data->stream_type);
 			player->flush_streams[decoder_data->stream_type] = FALSE;
 			pthread_cond_broadcast(&player->cond_queue);
 			goto pop;
@@ -730,7 +741,8 @@ detach_current_thread:
 	if (ret && !err)
 		err = ERROR_COULD_NOT_DETACH_THREAD;
 
-end: free(decoder_data);
+end:
+	free(decoder_data);
 	decoder_data = NULL;
 
 	// TODO do something with err
@@ -938,7 +950,7 @@ seek_loop:
 				player->flush_streams, FALSE))
 			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 
-		LOGI(3, "player_read_stream flushing internal codec bffers");
+		LOGI(3, "player_read_stream flushing internal codec buffers");
 		// flush internal buffers
 		for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 			if (player->input_codec_ctxs[i])
@@ -1025,15 +1037,13 @@ void *player_fill_video_rgb_frame(DecoderState *decoder_state) {
 	int destWidth = ctx->width;
 	int destHeight = ctx->height;
 
-	LOGI(3,
-			"player_fill_video_rgb_frame prepareFrame(%d, %d)", destWidth, destHeight);
+	LOGI(10, "player_fill_video_rgb_frame prepareFrame(%d, %d)", destWidth, destHeight);
 	jobject jbitmap = (*env)->CallObjectMethod(env, thiz,
 			player->player_prepare_frame, destWidth, destHeight);
 
 	jthrowable exc = (*env)->ExceptionOccurred(env);
 	if (exc) {
-		LOGE(1,
-				"player_fill_video_rgb_frame could not create jbitmap - exception occure");
+		LOGE(1, "player_fill_video_rgb_frame could not create jbitmap - exception occure");
 		goto free_frame;
 	}
 	if (jbitmap == NULL) {
@@ -1069,8 +1079,8 @@ void player_update_current_time(State *state, int is_finished) {
 	jboolean jis_finished = is_finished ? JNI_TRUE : JNI_FALSE;
 
 	(*state->env)->CallVoidMethod(state->env, state->thiz,
-			player->player_on_update_time, player->last_updated_time,
-			player->video_duration, jis_finished);
+		player->player_on_update_time, player->last_updated_time,
+		player->video_duration, jis_finished);
 }
 
 void player_update_time(State *state, double time) {
@@ -1119,8 +1129,7 @@ uint64_t player_find_layout_from_channels(int nb_channels) {
 
 void player_print_report_video_streams_free(JNIEnv* env, jobject thiz, Player *player) {
 	if (player->player_set_stream_info != NULL)
-		(*env)->CallVoidMethod(env, thiz, player->player_set_stream_info,
-				NULL);
+		(*env)->CallVoidMethod(env, thiz, player->player_set_stream_info, NULL);
 }
 
 int player_print_report_video_streams(JNIEnv* env, jobject thiz, Player *player) {
@@ -1150,9 +1159,7 @@ int player_print_report_video_streams(JNIEnv* env, jobject thiz, Player *player)
 		err = -ERROR_COULD_NOT_ALLOCATE_MEMORY;
 		goto free_map_class;
 	}
-	for (i = 0;
-			i < player->format_ctx->nb_streams && err == ERROR_NO_ERROR;
-			i++) {
+	for (i = 0; i < player->format_ctx->nb_streams && err == ERROR_NO_ERROR; i++) {
 		AVStream *stream = player->format_ctx->streams[i];
 		AVCodecContext *codec = stream->codec;
 		AVDictionary *metadaat = stream->metadata;
