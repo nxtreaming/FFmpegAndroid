@@ -109,7 +109,7 @@ void jni_player_seek(JNIEnv *env, jobject thiz, jint position);
 void jni_player_pause(JNIEnv *env, jobject thiz);
 void jni_player_resume(JNIEnv *env, jobject thiz);
 int jni_player_set_data_source(JNIEnv *env, jobject thiz, jstring string,
-	jobject dictionary, int video_stream_index, int audio_stream_index, int subtitle_stream_index);
+	jobject dictionary, int video_index, int audio_index, int subtitle_index);
 void jni_player_stop(JNIEnv *env, jobject thiz);
 void jni_player_render_frame_start(JNIEnv *env, jobject thiz);
 void jni_player_render_frame_stop(JNIEnv *env, jobject thiz);

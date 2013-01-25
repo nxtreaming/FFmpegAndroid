@@ -95,8 +95,8 @@ typedef struct Player {
 	AVFormatContext *format_ctx;
 	int input_inited;
 
-	int video_stream_index;
-	int audio_stream_index;
+	int video_index;
+	int audio_index;
 	AVStream *input_streams[AVMEDIA_TYPE_NB];
 	AVCodecContext *input_codec_ctxs[AVMEDIA_TYPE_NB];
 	int input_stream_numbers[AVMEDIA_TYPE_NB];
@@ -1106,8 +1106,8 @@ void player_find_streams_free(Player *player) {
 		if (player->input_codec_ctxs[i])
 			player_open_stream_free(player, i);
 	}
-	player->video_stream_index = -1;
-	player->audio_stream_index = -1;
+	player->video_index = -1;
+	player->audio_index = -1;
 }
 
 uint64_t player_find_layout_from_channels(int nb_channels) {
@@ -1333,7 +1333,7 @@ void player_create_audio_track_free(Player *player, State *state) {
 		(*state->env)->DeleteGlobalRef(state->env, player->audio_track);
 		player->audio_track = NULL;
 	}
-	if (player->audio_stream_index >= 0) {
+	if (player->audio_index >= 0) {
 		AVCodecContext **ctx = &player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
 		if (*ctx != NULL) {
 			LOGI(7, "player_set_data_sourceclose_audio_codec");
@@ -1624,7 +1624,7 @@ static int stream_component_open(Player *player, int stream_index) {
 	st->discard = AVDISCARD_DEFAULT;
 	switch(avctx->codec_type) {
 	case AVMEDIA_TYPE_AUDIO:
-		player->audio_stream_index = stream_index;
+		player->audio_index = stream_index;
 		player->input_streams[AVMEDIA_TYPE_AUDIO] = st;
 		player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO] = avctx;
 		player->input_stream_numbers[AVMEDIA_TYPE_AUDIO] = stream_index;
@@ -1633,7 +1633,7 @@ static int stream_component_open(Player *player, int stream_index) {
 		frame_size  = avctx->frame_size;
 		break;
 	case AVMEDIA_TYPE_VIDEO:
-		player->video_stream_index = stream_index;
+		player->video_index = stream_index;
 		player->input_streams[AVMEDIA_TYPE_VIDEO] = st;
 		player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO] = avctx;
 		player->input_stream_numbers[AVMEDIA_TYPE_VIDEO] = stream_index;
@@ -1662,8 +1662,8 @@ static int stream_component_open(Player *player, int stream_index) {
 }
 
 int player_set_data_source(State *state, const char *file_path,
-		AVDictionary *dictionary, int video_stream_index, int audio_stream_index,
-		int subtitle_stream_index) {
+		AVDictionary *dictionary, int video_index, int audio_index,
+		int subtitle_index) {
 	Player *player = state->player;
 	AVFormatContext *ic;
 	int st_index[AVMEDIA_TYPE_NB];
@@ -1681,9 +1681,9 @@ int player_set_data_source(State *state, const char *file_path,
 	player->pause = TRUE;
 	player->audio_pause_time = player->audio_resume_time = av_gettime();
 	memset(player->input_stream_numbers, -1, sizeof(player->input_stream_numbers));
-	player->input_stream_numbers[AVMEDIA_TYPE_VIDEO   ] = video_stream_index;
-	player->input_stream_numbers[AVMEDIA_TYPE_AUDIO   ] = audio_stream_index;
-	player->input_stream_numbers[AVMEDIA_TYPE_SUBTITLE] = subtitle_stream_index;
+	player->input_stream_numbers[AVMEDIA_TYPE_VIDEO   ] = video_index;
+	player->input_stream_numbers[AVMEDIA_TYPE_AUDIO   ] = audio_index;
+	player->input_stream_numbers[AVMEDIA_TYPE_SUBTITLE] = subtitle_index;
 	memset(st_index, -1, sizeof(st_index));
 
 	// trying decode video
@@ -1720,7 +1720,7 @@ int player_set_data_source(State *state, const char *file_path,
 	if ((err = player_alloc_queues(state)) < 0)
 		goto error;
 
-	DecoderState video_decoder_state = { player->video_stream_index, AVMEDIA_TYPE_VIDEO, player, state->env, state->thiz };
+	DecoderState video_decoder_state = { player->video_index, AVMEDIA_TYPE_VIDEO, player, state->env, state->thiz };
 	if ((err = player_prepare_rgb_frames(&video_decoder_state, state)) < 0)
 		goto error;
 
@@ -1899,8 +1899,8 @@ void jni_player_read_dictionary(JNIEnv *env, AVDictionary **dictionary, jobject 
 }
 
 int jni_player_set_data_source(JNIEnv *env, jobject thiz, jstring string,
-		jobject dictionary, int video_stream_index, int audio_stream_index,
-		int subtitle_stream_index) {
+		jobject dictionary, int video_index, int audio_index,
+		int subtitle_index) {
 	AVDictionary *dict = NULL;
 	if (dictionary != NULL) {
 		jni_player_read_dictionary(env, &dict, dictionary);
@@ -1911,8 +1911,8 @@ int jni_player_set_data_source(JNIEnv *env, jobject thiz, jstring string,
 	Player *player = player_get_player_field(env, thiz);
 	State state = { player, env, thiz };
 
-	int ret = player_set_data_source(&state, file_path, dict, video_stream_index,
-		audio_stream_index, subtitle_stream_index);
+	int ret = player_set_data_source(&state, file_path, dict, video_index,
+		audio_index, subtitle_index);
 
 	(*env)->ReleaseStringUTFChars(env, string, file_path);
 	return ret;
@@ -1934,8 +1934,8 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 
 	Player *player = malloc(sizeof(Player));
 	memset(player, 0, sizeof(player));
-	player->audio_stream_index = -1;
-	player->video_stream_index = -1;
+	player->audio_index = -1;
+	player->video_index = -1;
 	player->rendering = FALSE;
 
 	int err = ERROR_NO_ERROR;
