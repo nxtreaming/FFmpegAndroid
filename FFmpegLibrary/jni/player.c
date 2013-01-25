@@ -857,7 +857,9 @@ parse_frame:
 
 		if (queue == NULL) {
 			LOGI(3, "player_read_stream stream not found");
-			goto skip_loop;
+			av_free_packet(pkt);
+			pthread_mutex_unlock(&player->mutex_queue);
+			continue;
 		}
 
 		LOGI(10, "player_read_stream waiting for queue");
@@ -914,7 +916,7 @@ exit_loop:
 		goto detach_current_thread;
 
 seek_loop:
-		// setting stream thet will be used as a base for seeking
+		// setting stream which will be used as a base for seeking
 		seek_stream_index = player->stream_indexs[AVMEDIA_TYPE_VIDEO];
 		seek_stream = player->input_streams[AVMEDIA_TYPE_VIDEO];
 
@@ -961,10 +963,6 @@ seek_loop:
 		player->seek_position = DO_NOT_SEEK;
 		pthread_cond_broadcast(&player->cond_queue);
 		LOGI(3, "player_read_stream ending seek");
-
-skip_loop:
-		av_free_packet(pkt);
-		pthread_mutex_unlock(&player->mutex_queue);
 	}
 
 detach_current_thread:
