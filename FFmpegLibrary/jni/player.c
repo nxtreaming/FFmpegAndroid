@@ -91,6 +91,7 @@ typedef struct Player {
 
 	AVFormatContext *format_ctx;
 	int input_inited;
+	int64_t open_time;
 
 	int video_index;
 	int audio_index;
@@ -1539,18 +1540,31 @@ int player_create_context(Player *player) {
 void player_open_input_free(Player *player) {
 	if (player->input_inited) {
 		LOGI(7, "player_set_data_source close_file");
-		avformat_close_input(&(player->format_ctx));
+		avformat_close_input(&player->format_ctx);
 		player->input_inited = FALSE;
 	}
 }
 
+/* we interrupt if |avformat_open_input()| has elapsed 7 second */
+static int decoder_interrupt_cb(void *ctx) {
+	Player *player= ctx;
+	return (player->stop) || (player->open_time && (av_gettime() - player->open_time) > 7LL*AV_TIME_BASE) ;
+}
+
 int player_open_input(Player *player, const char *file_path, AVDictionary *dictionary) {
+	AVFormatContext *ic = NULL;
 	int ret;
-	if ((ret = avformat_open_input(&(player->format_ctx), file_path, NULL,
-			&dictionary)) < 0) {
+
+	ic = avformat_alloc_context();
+	ic->interrupt_callback.callback = decoder_interrupt_cb;
+	ic->interrupt_callback.opaque   = player;
+
+	player->open_time = av_gettime();
+	if ((ret = avformat_open_input(&ic, file_path, NULL, &dictionary)) < 0) {
 		char errbuf[128];
 		const char *errbuf_ptr = errbuf;
 
+		avformat_free_context(ic);
 		if (av_strerror(ret, errbuf, sizeof(errbuf)) < 0)
 			errbuf_ptr = strerror(AVUNERROR(ret));
 
@@ -1558,6 +1572,8 @@ int player_open_input(Player *player, const char *file_path, AVDictionary *dicti
 				"player_set_data_source Could not open video file: %s (%d: %s)\n", file_path, ret, errbuf_ptr);
 		return -ERROR_COULD_NOT_OPEN_VIDEO_FILE;
 	}
+	player->format_ctx = ic;
+	player->open_time = 0;
 	player->input_inited = TRUE;
 
 	return ERROR_NO_ERROR;
@@ -1686,8 +1702,6 @@ int player_set_data_source(State *state, const char *file_path,
 	int i, err = ERROR_NO_ERROR;
 
 	pthread_mutex_lock(&player->mutex_operation);
-
-	player_stop_impl(state);
 
 	if (player->playing)
 		goto end;
@@ -2079,7 +2093,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 
 	player->playing = FALSE;
 	player->pause = FALSE;
-	player->stop = TRUE;
+	player->stop = FALSE;
 	player->flush_video_play = FALSE;
 
 	av_log_set_level(AV_LOG_WARNING);
