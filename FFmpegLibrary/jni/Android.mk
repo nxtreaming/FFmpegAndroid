@@ -22,13 +22,8 @@ FEATURE_NEON:=
 LIBRARY_PROFILER:=
 LIBRARY_YUV2RGB:=
 MODULE_ENCRYPT:=
+MODULE_ENCRYPT:=
 
-#settings
-
-# add support for encryption
-MODULE_ENCRYPT:=yes
-
-#if armeabi-v7a
 ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
 	# add neon optimization code (only armeabi-v7a)
 	FEATURE_NEON:=yes
@@ -36,7 +31,6 @@ else
 
 endif
 
-#if armeabi or armeabi-v7a
 ifeq ($(TARGET_ARCH_ABI),$(filter $(TARGET_ARCH_ABI),armeabi armeabi-v7a))
 	# add profiler (only arm)
 	#LIBRARY_PROFILER:=yes
@@ -45,7 +39,6 @@ ifeq ($(TARGET_ARCH_ABI),$(filter $(TARGET_ARCH_ABI),armeabi armeabi-v7a))
 	LIBRARY_YUV2RGB:=yes
 endif
 
-#includes
 ifdef MODULE_ENCRYPT
 	include $(LOCAL_PATH)/Android-tropicssl.mk
 endif
@@ -85,7 +78,6 @@ LOCAL_SRC_FILES := ffmpeg-jni.c player.c queue.c helpers.c jni-protocol.c
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/ffmpeg-build/$(TARGET_ARCH_ABI)/include
 LOCAL_SHARED_LIBRARY := ffmpeg-prebuilt
 
-#if enabled profiler add it
 ifdef LIBRARY_PROFILER
 	LOCAL_CFLAGS += -pg -g -DPROFILER
 	LOCAL_STATIC_LIBRARIES += andprof
@@ -119,7 +111,6 @@ LOCAL_SRC_FILES := ffmpeg-jni.c player.c queue.c helpers.c jni-protocol.c
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/ffmpeg-build/$(TARGET_ARCH_ABI)/include
 LOCAL_SHARED_LIBRARY := ffmpeg-prebuilt-neon
 
-#if enabled profiler add it
 ifdef LIBRARY_PROFILER
 	LOCAL_CFLAGS += -pg -g -DPROFILER
 	LOCAL_STATIC_LIBRARIES += andprof
