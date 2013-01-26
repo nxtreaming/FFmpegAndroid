@@ -22,13 +22,11 @@ FEATURE_NEON:=
 LIBRARY_PROFILER:=
 LIBRARY_YUV2RGB:=
 MODULE_ENCRYPT:=
-MODULE_ENCRYPT:=
+MODULE_JNI_PROTOCOL:=
 
 ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
 	# add neon optimization code (only armeabi-v7a)
 	FEATURE_NEON:=yes
-else
-
 endif
 
 ifeq ($(TARGET_ARCH_ABI),$(filter $(TARGET_ARCH_ABI),armeabi armeabi-v7a))
@@ -74,7 +72,7 @@ include $(CLEAR_VARS)
 LOCAL_ALLOW_UNDEFINED_SYMBOLS=false
 LOCAL_MODULE := ffmpeg-jni
 LOCAL_CFLAGS += -Wall
-LOCAL_SRC_FILES := ffmpeg-jni.c player.c queue.c helpers.c jni-protocol.c
+LOCAL_SRC_FILES := ffmpeg-jni.c player.c queue.c helpers.c
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/ffmpeg-build/$(TARGET_ARCH_ABI)/include
 LOCAL_SHARED_LIBRARY := ffmpeg-prebuilt
 
@@ -99,6 +97,11 @@ ifdef MODULE_ENCRYPT
 	LOCAL_STATIC_LIBRARIES += tropicssl
 endif
 
+ifdef MODULE_JNI_PROTOCOL
+	LOCAL_CFLAGS += -DMODULE_JNI_PROTOCOL
+	LOCAL_SRC_FILES += jni-protocol.c
+endif
+
 LOCAL_LDLIBS := -llog -ljnigraphics -lz -lm -g $(LOCAL_PATH)/ffmpeg-build/$(TARGET_ARCH_ABI)/libffmpeg.so
 include $(BUILD_SHARED_LIBRARY)
 
@@ -107,7 +110,7 @@ include $(CLEAR_VARS)
 LOCAL_ALLOW_UNDEFINED_SYMBOLS=false
 LOCAL_MODULE := ffmpeg-jni-neon
 LOCAL_CFLAGS += -Wall
-LOCAL_SRC_FILES := ffmpeg-jni.c player.c queue.c helpers.c jni-protocol.c
+LOCAL_SRC_FILES := ffmpeg-jni.c player.c queue.c helpers.c
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/ffmpeg-build/$(TARGET_ARCH_ABI)/include
 LOCAL_SHARED_LIBRARY := ffmpeg-prebuilt-neon
 
@@ -127,6 +130,12 @@ ifdef MODULE_ENCRYPT
 	LOCAL_C_INCLUDES += $(LOCAL_PATH)/tropicssl/include
 	LOCAL_STATIC_LIBRARIES += tropicssl
 endif
+
+ifdef MODULE_JNI_PROTOCOL
+	LOCAL_CFLAGS += -DMODULE_JNI_PROTOCOL
+	LOCAL_SRC_FILES += jni-protocol.c
+endif
+
 LOCAL_LDLIBS := -llog -ljnigraphics -lz -lm -g $(LOCAL_PATH)/ffmpeg-build/$(TARGET_ARCH_ABI)/libffmpeg-neon.so
 include $(BUILD_SHARED_LIBRARY)
 endif

@@ -2099,7 +2099,9 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 	av_log_set_level(AV_LOG_WARNING);
 	avformat_network_init();
 	av_register_all();
+#ifdef MODULE_JNI_PROTOCOL
 	register_jni_protocol(player->get_javavm);
+#endif
 #ifdef MODULE_ENCRYPT
 	register_aes_protocol();
 #endif
