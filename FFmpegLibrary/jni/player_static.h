@@ -41,10 +41,10 @@ static const struct {
 };
 
 // FFmpegPlayer
-static JavaField player_m_native_player = {"mNativePlayer", "I"};
-static JavaMethod player_on_update_time = {"onUpdateTime","(IIZ)V"};
-static JavaMethod player_prepare_audio_track = {"prepareAudioTrack", "(II)Landroid/media/AudioTrack;"};
-static JavaMethod player_prepare_frame = {"prepareFrame", "(II)Landroid/graphics/Bitmap;"};
+static JavaField player_mNativePlayer = {"mNativePlayer", "I"};
+static JavaMethod player_onUpdateTime = {"onUpdateTime","(IIZ)V"};
+static JavaMethod player_prepareAudioTrack = {"prepareAudioTrack", "(II)Landroid/media/AudioTrack;"};
+static JavaMethod player_prepareFrame = {"prepareFrame", "(II)Landroid/graphics/Bitmap;"};
 
 // AudioTrack
 static char *android_track_class_path = "android/media/AudioTrack";
@@ -53,7 +53,7 @@ static JavaMethod audio_track_pause = {"pause", "()V"};
 static JavaMethod audio_track_play = {"play", "()V"};
 static JavaMethod audio_track_flush = {"flush", "()V"};
 static JavaMethod audio_track_stop = {"stop", "()V"};
-static JavaMethod audio_track_get_channel_count = {"getChannelCount", "()I"};
-static JavaMethod audio_track_get_sample_rate = {"getSampleRate", "()I"};
+static JavaMethod audio_track_getChannelCount = {"getChannelCount", "()I"};
+static JavaMethod audio_track_getSampleRate = {"getSampleRate", "()I"};
 
 #endif

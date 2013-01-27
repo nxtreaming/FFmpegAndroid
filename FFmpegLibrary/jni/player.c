@@ -81,12 +81,12 @@ typedef struct Player {
 	jmethodID audio_track_pause;
 	jmethodID audio_track_flush;
 	jmethodID audio_track_stop;
-	jmethodID audio_track_get_channel_count;
-	jmethodID audio_track_get_sample_rate;
+	jmethodID audio_track_getChannelCount;
+	jmethodID audio_track_getSampleRate;
 
-	jmethodID player_prepare_frame;
-	jmethodID player_on_update_time;
-	jmethodID player_prepare_audio_track;
+	jmethodID player_prepareFrame;
+	jmethodID player_onUpdateTime;
+	jmethodID player_prepareAudioTrack;
 
 	pthread_mutex_t mutex_operation;
 
@@ -908,7 +908,7 @@ end:
 
 Player * player_get_player_field(JNIEnv *env, jobject thiz) {
 	jfieldID m_native_layer_field = java_get_field(env, player_class_path,
-			player_m_native_player);
+			player_mNativePlayer);
 	Player *player = (Player *) (*env)->GetIntField(env, thiz,
 			m_native_layer_field);
 	return player;
@@ -968,7 +968,7 @@ void *player_fill_video_rgb_frame(DecoderState *decoder_state) {
 
 	LOGI(10, "player_fill_video_rgb_frame prepareFrame(%d, %d)", destWidth, destHeight);
 	jobject jbitmap = (*env)->CallObjectMethod(env, thiz,
-			player->player_prepare_frame, destWidth, destHeight);
+			player->player_prepareFrame, destWidth, destHeight);
 
 	jthrowable exc = (*env)->ExceptionOccurred(env);
 	if (exc) {
@@ -1008,7 +1008,7 @@ void player_update_current_time(State *state, int is_finished) {
 	jboolean jis_finished = is_finished ? JNI_TRUE : JNI_FALSE;
 
 	(*state->env)->CallVoidMethod(state->env, state->thiz,
-		player->player_on_update_time, player->last_updated_time,
+		player->player_onUpdateTime, player->last_updated_time,
 		player->video_duration, jis_finished);
 }
 
@@ -1181,7 +1181,7 @@ int player_create_audio_track(Player *player, State *state) {
 	int channels = ctx->channels;
 
 	jobject audio_track = (*state->env)->CallObjectMethod(state->env,
-		state->thiz, player->player_prepare_audio_track, sample_rate, channels);
+		state->thiz, player->player_prepareAudioTrack, sample_rate, channels);
 
 	jthrowable exc = (*state->env)->ExceptionOccurred(state->env);
 	if (exc) {
@@ -1198,9 +1198,9 @@ int player_create_audio_track(Player *player, State *state) {
 	}
 
 	player->audio_track_channel_count = (*state->env)->CallIntMethod(state->env,
-		player->audio_track, player->audio_track_get_channel_count);
+		player->audio_track, player->audio_track_getChannelCount);
 	int audio_track_sample_rate = (*state->env)->CallIntMethod(state->env,
-		player->audio_track, player->audio_track_get_sample_rate);
+		player->audio_track, player->audio_track_getSampleRate);
 	player->audio_track_format = AV_SAMPLE_FMT_S16;
 
 	int64_t audio_track_layout = player_find_layout_from_channels(
@@ -1798,7 +1798,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 		}
 
 		jfieldID player_m_native_player_field = java_get_field(env,
-				player_class_path, player_m_native_player);
+				player_class_path, player_mNativePlayer);
 		if (player_m_native_player_field == NULL) {
 			err = ERROR_NOT_FOUND_M_NATIVE_PLAYER_FIELD;
 			goto free_player;
@@ -1807,23 +1807,23 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 		(*env)->SetIntField(env, thiz, player_m_native_player_field,
 				(jint) player);
 
-		player->player_prepare_frame = java_get_method(env, player_class,
-				player_prepare_frame);
-		if (player->player_prepare_frame == NULL) {
+		player->player_prepareFrame = java_get_method(env, player_class,
+				player_prepareFrame);
+		if (player->player_prepareFrame == NULL) {
 			err = ERROR_NOT_FOUND_PREPARE_FRAME_METHOD;
 			goto free_player;
 		}
 
-		player->player_on_update_time = java_get_method(env,
-				player_class, player_on_update_time);
-		if (player->player_on_update_time == NULL) {
+		player->player_onUpdateTime = java_get_method(env,
+				player_class, player_onUpdateTime);
+		if (player->player_onUpdateTime == NULL) {
 			err = ERROR_NOT_FOUND_ON_UPDATE_TIME_METHOD;
 			goto free_player;
 		}
 
-		player->player_prepare_audio_track = java_get_method(env,
-				player_class, player_prepare_audio_track);
-		if (player->player_prepare_audio_track == NULL) {
+		player->player_prepareAudioTrack = java_get_method(env,
+				player_class, player_prepareAudioTrack);
+		if (player->player_prepareAudioTrack == NULL) {
 			err = ERROR_NOT_FOUND_PREPARE_AUDIO_TRACK_METHOD;
 			goto free_player;
 		}
@@ -1879,16 +1879,16 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 		goto delete_audio_track_global_ref;
 	}
 
-	player->audio_track_get_channel_count = java_get_method(env, player->audio_track_class,
-		audio_track_get_channel_count);
-	if (player->audio_track_get_channel_count == NULL) {
+	player->audio_track_getChannelCount = java_get_method(env, player->audio_track_class,
+		audio_track_getChannelCount);
+	if (player->audio_track_getChannelCount == NULL) {
 		err = ERROR_NOT_FOUND_GET_CHANNEL_COUNT_METHOD;
 		goto delete_audio_track_global_ref;
 	}
 
-	player->audio_track_get_sample_rate = java_get_method(env,
-		player->audio_track_class, audio_track_get_sample_rate);
-	if (player->audio_track_get_sample_rate == NULL) {
+	player->audio_track_getSampleRate = java_get_method(env,
+		player->audio_track_class, audio_track_getSampleRate);
+	if (player->audio_track_getSampleRate == NULL) {
 		err = ERROR_NOT_FOUND_GET_SAMPLE_RATE_METHOD;
 		goto delete_audio_track_global_ref;
 	}
