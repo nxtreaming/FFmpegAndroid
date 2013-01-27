@@ -1,5 +1,6 @@
 # Application.mk
 # Copyright (c) 2012 Jacek Marchwicki
+# Copyright (c) 2013 GoogleGeek
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -51,18 +52,18 @@ endif
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := ffmpeg-prebuilt
-LOCAL_SRC_FILES := ffmpeg-build/$(TARGET_ARCH_ABI)/libffmpeg.so
-LOCAL_EXPORT_C_INCLUDES := ffmpeg-build/$(TARGET_ARCH_ABI)/include
-LOCAL_EXPORT_LDLIBS := ffmpeg-build/$(TARGET_ARCH_ABI)/libffmpeg.so
+LOCAL_SRC_FILES := ffmpeg_build/$(TARGET_ARCH_ABI)/libffmpeg.so
+LOCAL_EXPORT_C_INCLUDES := ffmpeg_build/$(TARGET_ARCH_ABI)/include
+LOCAL_EXPORT_LDLIBS := ffmpeg_build/$(TARGET_ARCH_ABI)/libffmpeg.so
 LOCAL_PRELINK_MODULE := true
 include $(PREBUILT_SHARED_LIBRARY)
 
 ifdef FEATURE_NEON
 	include $(CLEAR_VARS)
 	LOCAL_MODULE := ffmpeg-prebuilt-neon
-	LOCAL_SRC_FILES := ffmpeg-build/$(TARGET_ARCH_ABI)/libffmpeg-neon.so
-	LOCAL_EXPORT_C_INCLUDES := ffmpeg-build/$(TARGET_ARCH_ABI)-neon/include
-	LOCAL_EXPORT_LDLIBS := ffmpeg-build/$(TARGET_ARCH_ABI)/libffmpeg-neon.so
+	LOCAL_SRC_FILES := ffmpeg_build/$(TARGET_ARCH_ABI)-neon/libffmpeg-neon.so
+	LOCAL_EXPORT_C_INCLUDES := ffmpeg_build/$(TARGET_ARCH_ABI)-neon/include
+	LOCAL_EXPORT_LDLIBS := ffmpeg_build/$(TARGET_ARCH_ABI)-neon/libffmpeg-neon.so
 	LOCAL_PRELINK_MODULE := true
 	include $(PREBUILT_SHARED_LIBRARY)
 endif
@@ -73,7 +74,7 @@ LOCAL_ALLOW_UNDEFINED_SYMBOLS=false
 LOCAL_MODULE := ffmpeg-jni
 LOCAL_CFLAGS += -Wall
 LOCAL_SRC_FILES := ffmpeg-jni.c player.c queue.c helpers.c
-LOCAL_C_INCLUDES := $(LOCAL_PATH)/ffmpeg-build/$(TARGET_ARCH_ABI)/include
+LOCAL_C_INCLUDES := $(LOCAL_PATH)/ffmpeg_build/$(TARGET_ARCH_ABI)/include
 LOCAL_SHARED_LIBRARY := ffmpeg-prebuilt
 
 ifdef LIBRARY_PROFILER
@@ -102,7 +103,7 @@ ifdef MODULE_JNI_PROTOCOL
 	LOCAL_SRC_FILES += jni-protocol.c
 endif
 
-LOCAL_LDLIBS := -llog -ljnigraphics -lz -lm -g $(LOCAL_PATH)/ffmpeg-build/$(TARGET_ARCH_ABI)/libffmpeg.so
+LOCAL_LDLIBS := -llog -ljnigraphics -lz -lm -g $(LOCAL_PATH)/ffmpeg_build/$(TARGET_ARCH_ABI)/libffmpeg.so
 include $(BUILD_SHARED_LIBRARY)
 
 ifdef FEATURE_NEON
@@ -111,7 +112,7 @@ LOCAL_ALLOW_UNDEFINED_SYMBOLS=false
 LOCAL_MODULE := ffmpeg-jni-neon
 LOCAL_CFLAGS += -Wall
 LOCAL_SRC_FILES := ffmpeg-jni.c player.c queue.c helpers.c
-LOCAL_C_INCLUDES := $(LOCAL_PATH)/ffmpeg-build/$(TARGET_ARCH_ABI)/include
+LOCAL_C_INCLUDES := $(LOCAL_PATH)/ffmpeg_build/$(TARGET_ARCH_ABI)-neon/include
 LOCAL_SHARED_LIBRARY := ffmpeg-prebuilt-neon
 
 ifdef LIBRARY_PROFILER
@@ -136,7 +137,7 @@ ifdef MODULE_JNI_PROTOCOL
 	LOCAL_SRC_FILES += jni-protocol.c
 endif
 
-LOCAL_LDLIBS := -llog -ljnigraphics -lz -lm -g $(LOCAL_PATH)/ffmpeg-build/$(TARGET_ARCH_ABI)/libffmpeg-neon.so
+LOCAL_LDLIBS := -llog -ljnigraphics -lz -lm -g $(LOCAL_PATH)/ffmpeg_build/$(TARGET_ARCH_ABI)-neon/libffmpeg-neon.so
 include $(BUILD_SHARED_LIBRARY)
 endif
 
