@@ -221,8 +221,10 @@ function build_ffmpeg()
 	    --disable-avresample \
 	    --disable-parsers \
 	    --disable-protocols \
+	    --enable-demuxer=flv \
 	    --enable-demuxer=mov \
 	    --enable-demuxer=hls \
+	    --enable-muxer=flv \
 	    --enable-protocol=file \
 	    --enable-protocol=tcp \
 	    --enable-protocol=hls \
