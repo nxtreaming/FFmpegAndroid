@@ -417,7 +417,6 @@ int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketData *pa
 	LOGI(10,
 			"player_decode_video Decoded video frame: %f, time_base: %lld", time, pts);
 
-	// saving in buffer converted video frame
 	LOGI(7, "player_decode_video copy wait");
 
 #ifdef MEASURE_TIME
@@ -838,7 +837,6 @@ exit_loop:
 			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 		LOGI(3, "player_read_stream stopped");
 
-		// flush internal buffers
 		for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 			if (player->input_codec_ctxs[i])
 				avcodec_flush_buffers(player->input_codec_ctxs[i]);
@@ -1520,7 +1518,6 @@ int player_set_data_source(State *state, const char *file_path,
 	if (player->playing)
 		goto end;
 
-	// initial setup
 	player->out_format = AV_PIX_FMT_RGB565;
 	player->pause = TRUE;
 	player->audio_pause_time = player->audio_resume_time = av_gettime();
@@ -1583,7 +1580,6 @@ int player_set_data_source(State *state, const char *file_path,
 		goto error;
 	}
 
-	// SUCCESS
 	player->playing = TRUE;
 	LOGI(3, "player_set_data_source success");
 	goto end;
@@ -1649,8 +1645,6 @@ void jni_player_pause(JNIEnv *env, jobject thiz) {
 			player->audio_track_pause);
 	player->audio_pause_time = av_gettime();
 
-	// just leave exception
-
 	pthread_cond_broadcast(&player->cond_queue);
 
 do_nothing:
@@ -1676,7 +1670,6 @@ void jni_player_resume(JNIEnv *env, jobject thiz) {
 	player->pause = FALSE;
 	(*env)->CallVoidMethod(env, player->audio_track,
 			player->audio_track_play);
-	// just leave exception
 
 	player->audio_resume_time = av_gettime();
 	if (player->audio_write_time < player->audio_pause_time) {
