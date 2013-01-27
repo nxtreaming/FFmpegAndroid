@@ -89,7 +89,7 @@ jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved)
 	assert(env != NULL);
 
 	if (register_native_methods(env,
-			player_class_path_name,
+			player_class_path,
 			player_methods,
 			NELEM(player_methods)) < 0) {
 		fprintf(stderr, "ERROR: Exif native registration failed\n");
