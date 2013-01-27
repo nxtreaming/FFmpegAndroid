@@ -68,6 +68,7 @@
 #define DO_NOT_SEEK (0xdeadbeef)
 
 #define MIN_SLEEP_TIME_MS 2
+#define EXTERNAL_CLOCK_SPEED_STEP 0.001
 
 //#define MEASURE_TIME
 
@@ -144,8 +145,12 @@ typedef struct Player {
 	int64_t audio_pause_time;
 	int64_t audio_resume_time;
 
-	double video_current_pts;       // current displayed pts (different from video_clock if frame fifos are used) 	double video_current_pts_drift; // video_current_pts - time (av_gettime) at which we updated video_current_pts - used to have running video pts 
-	double external_clock;                   ///< external clock base 	double external_clock_drift;             ///< external clock base - time (av_gettime) at which we updated external_clock 	int64_t external_clock_time;             ///< last reference time 	double external_clock_speed;             ///< speed of the external clock
+	double video_current_pts;       // current displayed pts (different from video_clock if frame fifos are used)
+	double video_current_pts_drift; // video_current_pts - time (av_gettime) at which we updated video_current_pts - used to have running video pts
+	double external_clock;          ///< external clock base
+	double external_clock_drift;    ///< external clock base - time (av_gettime) at which we updated external_clock
+	int64_t external_clock_time;    ///< last reference time
+	double external_clock_speed;    ///< speed of the external clock
 
 #ifdef YUV2RGB
 	int dither;
@@ -245,21 +250,23 @@ static void update_external_clock_pts(Player *player, double pts) {
 }
 
 static void update_external_clock_speed(Player *player, double speed) {
-	update_external_clock_pts(player, get_external_clock(is));
+	update_external_clock_pts(player, get_external_clock(player));
 	player->external_clock_speed = speed;
 }
 
-static void check_external_clock_speed(VideoState *is) {
-	double speed = is->external_clock_speed;
+#if 0
+static void check_external_clock_speed(Player *player) {
+	double speed = player->external_clock_speed;
 	if (speed != 1.0)
-		update_external_clock_speed(is, speed + EXTERNAL_CLOCK_SPEED_STEP * (1.0 - speed) / fabs(1.0 - speed));
+		update_external_clock_speed(player, speed + EXTERNAL_CLOCK_SPEED_STEP * (1.0 - speed) / fabs(1.0 - speed));
 }
+#endif
 
 static void update_video_pts(Player *player, double pts) {
 	double time = av_gettime() / 1000000.0;
 	/* update current video pts */
-	is->video_current_pts = pts;
-	is->video_current_pts_drift = is->video_current_pts - time;
+	player->video_current_pts = pts;
+	player->video_current_pts_drift = player->video_current_pts - time;
 }
 
 int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
