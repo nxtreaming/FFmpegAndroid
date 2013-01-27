@@ -144,6 +144,9 @@ typedef struct Player {
 	int64_t audio_pause_time;
 	int64_t audio_resume_time;
 
+	double video_current_pts;       // current displayed pts (different from video_clock if frame fifos are used) 	double video_current_pts_drift; // video_current_pts - time (av_gettime) at which we updated video_current_pts - used to have running video pts 
+	double external_clock;                   ///< external clock base 	double external_clock_drift;             ///< external clock base - time (av_gettime) at which we updated external_clock 	int64_t external_clock_time;             ///< last reference time 	double external_clock_speed;             ///< speed of the external clock
+
 #ifdef YUV2RGB
 	int dither;
 #endif
@@ -214,6 +217,49 @@ void throw_interrupted_exception(JNIEnv *env, const char * msg) {
 
 void throw_runtime_exception(JNIEnv *env, const char * msg) {
 	throw_exception(env, runtime_exception_class_path, msg);
+}
+
+/* get the current video clock value */
+static double get_video_clock(Player *player) {
+	if (player->pause) {
+		return player->video_current_pts;
+	} else {
+		return player->video_current_pts_drift + av_gettime() / 1000000.0;
+	}
+}
+
+/* get the current external clock value */
+static double get_external_clock(Player *player) {
+	if (player->pause) {
+		return player->external_clock;
+	} else {
+		double time = av_gettime() / 1000000.0;
+		return player->external_clock_drift + time - (time - player->external_clock_time / 1000000.0) * (1.0 - player->external_clock_speed);
+	}
+}
+
+static void update_external_clock_pts(Player *player, double pts) {
+	player->external_clock_time = av_gettime();
+	player->external_clock = pts;
+	player->external_clock_drift = pts - player->external_clock_time / 1000000.0;
+}
+
+static void update_external_clock_speed(Player *player, double speed) {
+	update_external_clock_pts(player, get_external_clock(is));
+	player->external_clock_speed = speed;
+}
+
+static void check_external_clock_speed(VideoState *is) {
+	double speed = is->external_clock_speed;
+	if (speed != 1.0)
+		update_external_clock_speed(is, speed + EXTERNAL_CLOCK_SPEED_STEP * (1.0 - speed) / fabs(1.0 - speed));
+}
+
+static void update_video_pts(Player *player, double pts) {
+	double time = av_gettime() / 1000000.0;
+	/* update current video pts */
+	is->video_current_pts = pts;
+	is->video_current_pts_drift = is->video_current_pts - time;
 }
 
 int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
@@ -888,6 +934,7 @@ seek_loop:
 		}
 
 		player->seek_position = DO_NOT_SEEK;
+		update_external_clock_pts(player, seek_target / (double)AV_TIME_BASE);
 		pthread_cond_broadcast(&player->cond_queue);
 		LOGI(3, "player_read_stream ending seek");
 
@@ -1390,6 +1437,8 @@ int player_open_input(Player *player, const char *file_path, AVDictionary *dicti
 	player->format_ctx = ic;
 	player->open_time = 0;
 	player->input_inited = TRUE;
+	update_external_clock_pts(player, (double)AV_NOPTS_VALUE); 	update_external_clock_speed(player, 1.0);
+	player->video_current_pts_drift = -av_gettime() / 1000000.0;
 
 	return ERROR_NO_ERROR;
 }
@@ -1649,6 +1698,7 @@ void jni_player_pause(JNIEnv *env, jobject thiz) {
 	}
 
 	player->audio_pause_time = av_gettime();
+	update_external_clock_pts(player, get_external_clock(player));
 
 	pthread_cond_broadcast(&player->cond_queue);
 
@@ -1684,6 +1734,7 @@ void jni_player_resume(JNIEnv *env, jobject thiz) {
 	} else if (player->audio_write_time < player->audio_resume_time) {
 		player->audio_write_time += player->audio_resume_time - player->audio_pause_time;
 	}
+	player->video_current_pts_drift = player->video_current_pts - av_gettime() / 1000000.0;
 
 	pthread_cond_broadcast(&player->cond_queue);
 
@@ -2058,7 +2109,9 @@ test:
 		double pts_time_diff_d = elem->time - player->audio_clock;
 		int64_t sleep_time = (int64_t) (pts_time_diff_d * 1000.0)
 				- (int64_t) (time_diff / 1000L);
-
+		if (!player->audio_track) {
+			sleep_time = (get_video_clock(player) - get_external_clock(player)) * 1000LL;
+		}
 		LOGI(9,
 				"jni_player_render_frame current_time: "
 				"%lld, write_time: %lld, time_diff: %lld, "
@@ -2083,6 +2136,7 @@ test:
 		LOGI(9, "jni_player_render_frame cond occure");
 	}
 	player_update_time(&state, elem->time);
+	update_video_pts(player,elem->time);
 	pthread_mutex_unlock(&player->mutex_queue);
 
 	LOGI(7, "jni_player_render_frame rendering...");
