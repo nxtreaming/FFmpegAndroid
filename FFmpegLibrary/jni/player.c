@@ -85,7 +85,6 @@ typedef struct Player {
 	jmethodID player_prepare_frame;
 	jmethodID player_on_update_time;
 	jmethodID player_prepare_audio_track;
-	jmethodID player_set_stream_info;
 
 	pthread_mutex_t mutex_operation;
 
@@ -179,36 +178,26 @@ typedef struct PacketData {
 	AVPacket *packet;
 } PacketData;
 
-static JavaMethod empty_constructor = {"<init>", "()V"};
-
 // InterruptedException
-static char *interrupted_exception_class_path_name = "java/lang/InterruptedException";
+static char *interrupted_exception_class_path = "java/lang/InterruptedException";
 
 // RuntimeException
-static char *runtime_exception_class_path_name = "java/lang/RuntimeException";
+static char *runtime_exception_class_path = "java/lang/RuntimeException";
 
 // NotPlayingException
-static char *not_playing_exception_class_path_name = "net/uplayer/ffmpeg/NotPlayingException";
+static char *not_playing_exception_class_path = "net/uplayer/ffmpeg/NotPlayingException";
 
 // HashMap
-static char *hash_map_class_path_name = "java/util/HashMap";
-static char *map_class_path_name = "java/util/Map";
+static char *map_class_path = "java/util/Map";
 static JavaMethod map_key_set = {"keySet", "()Ljava/util/Set;"};
 static JavaMethod map_get = {"get", "(Ljava/lang/Object;)Ljava/lang/Object;"};
-static JavaMethod map_put = {"put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"};
-
-// FFmpegStreamInfo
-static char *stream_info_class_path_name = "net/uplayer/ffmpeg/FFmpegStreamInfo";
-static JavaMethod steram_info_set_metadata = {"setMetadata", "(Ljava/util/Map;)V"};
-static JavaMethod steram_info_set_media_type_internal = {"setMediaTypeInternal", "(I)V"};
-static JavaMethod stream_info_set_stream_number = {"setStreamNumber", "(I)V"};
 
 // Set
-static char *set_class_path_name = "java/util/Set";
+static char *set_class_path = "java/util/Set";
 static JavaMethod set_iterator = {"iterator", "()Ljava/util/Iterator;"};
 
 // Iterator
-static char *iterator_class_path_name = "java/util/Iterator";
+static char *iterator_class_path = "java/util/Iterator";
 static JavaMethod iterator_next = {"next", "()Ljava/lang/Object;"};
 static JavaMethod iterator_has_next = {"hasNext", "()Z"};
 
@@ -233,10 +222,9 @@ static JavaField player_m_native_player = {"mNativePlayer", "I"};
 static JavaMethod player_on_update_time = {"onUpdateTime","(IIZ)V"};
 static JavaMethod player_prepare_audio_track = {"prepareAudioTrack", "(II)Landroid/media/AudioTrack;"};
 static JavaMethod player_prepare_frame = {"prepareFrame", "(II)Landroid/graphics/Bitmap;"};
-static JavaMethod player_set_stream_info = {"setStreamsInfo", "([Lnet/uplayer/ffmpeg/FFmpegStreamInfo;)V"};
 
 // AudioTrack
-static char *android_track_class_path_name = "android/media/AudioTrack";
+static char *android_track_class_path = "android/media/AudioTrack";
 static JavaMethod audio_track_write = {"write", "([BII)I"};
 static JavaMethod audio_track_pause = {"pause", "()V"};
 static JavaMethod audio_track_play = {"play", "()V"};
@@ -263,9 +251,9 @@ struct timespec timespec_diff(struct timespec start, struct timespec end)
 }
 #endif
 
-void throw_exception(JNIEnv *env, const char * exception_class_path_name,
+void throw_exception(JNIEnv *env, const char * exception_class_path,
 		const char *msg) {
-	jclass newExcCls = (*env)->FindClass(env, exception_class_path_name);
+	jclass newExcCls = (*env)->FindClass(env, exception_class_path);
 	if (newExcCls == NULL) {
 		assert(FALSE);
 	}
@@ -274,11 +262,11 @@ void throw_exception(JNIEnv *env, const char * exception_class_path_name,
 }
 
 void throw_interrupted_exception(JNIEnv *env, const char * msg) {
-	throw_exception(env, interrupted_exception_class_path_name, msg);
+	throw_exception(env, interrupted_exception_class_path, msg);
 }
 
 void throw_runtime_exception(JNIEnv *env, const char * msg) {
-	throw_exception(env, runtime_exception_class_path_name, msg);
+	throw_exception(env, runtime_exception_class_path, msg);
 }
 
 int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
@@ -988,7 +976,7 @@ end:
 }
 
 Player * player_get_player_field(JNIEnv *env, jobject thiz) {
-	jfieldID m_native_layer_field = java_get_field(env, player_class_path_name,
+	jfieldID m_native_layer_field = java_get_field(env, player_class_path,
 			player_m_native_player);
 	Player *player = (Player *) (*env)->GetIntField(env, thiz,
 			m_native_layer_field);
@@ -1135,109 +1123,6 @@ uint64_t player_find_layout_from_channels(int nb_channels) {
 		if (nb_channels == channel_android_layout_map[i].nb_channels)
 			return channel_android_layout_map[i].layout;
 	return (uint64_t) 0;
-}
-
-void player_print_report_video_streams_free(JNIEnv* env, jobject thiz, Player *player) {
-	if (player->player_set_stream_info != NULL)
-		(*env)->CallVoidMethod(env, thiz, player->player_set_stream_info, NULL);
-}
-
-int player_print_report_video_streams(JNIEnv* env, jobject thiz, Player *player) {
-	int i;
-	int err = ERROR_NO_ERROR;
-	jclass stream_info_class = (*env)->FindClass(env,
-			stream_info_class_path_name);
-	jmethodID stream_info_set_metadata_method = java_get_method(env,
-			stream_info_class, steram_info_set_metadata);
-	jmethodID stream_info_set_media_type_internal_method = java_get_method(env,
-			stream_info_class, steram_info_set_media_type_internal);
-	jmethodID stream_info_set_stream_number_method = java_get_method(env,
-			stream_info_class, stream_info_set_stream_number);
-	jmethodID stream_info_constructor = java_get_method(env, stream_info_class,
-			empty_constructor);
-
-	jclass hash_map_class = (*env)->FindClass(env, hash_map_class_path_name);
-	jmethodID hash_map_constructor = java_get_method(env, hash_map_class,
-			empty_constructor);
-
-	jclass map_class = (*env)->FindClass(env, map_class_path_name);
-	jmethodID map_put_method = java_get_method(env, map_class, map_put);
-
-	jobjectArray array = (*env)->NewObjectArray(env,
-			player->format_ctx->nb_streams, stream_info_class, NULL);
-	if (array == NULL) {
-		err = -ERROR_COULD_NOT_ALLOCATE_MEMORY;
-		goto free_map_class;
-	}
-	for (i = 0; i < player->format_ctx->nb_streams && err == ERROR_NO_ERROR; i++) {
-		AVStream *stream = player->format_ctx->streams[i];
-		AVCodecContext *codec = stream->codec;
-		AVDictionary *metadaat = stream->metadata;
-		AVDictionaryEntry *tag = NULL;
-
-		jobject stream_info = (*env)->NewObject(env, stream_info_class,
-				stream_info_constructor);
-		if (stream_info == NULL) {
-			err = -ERROR_COULD_NOT_ALLOCATE_MEMORY;
-			break;
-		}
-
-		jobject map = (*env)->NewObject(env, hash_map_class,
-				hash_map_constructor);
-		if (map == NULL) {
-			err = -ERROR_COULD_NOT_ALLOCATE_MEMORY;
-			goto loop_free_stream_info;
-		}
-
-		(*env)->CallVoidMethod(env, stream_info,
-				stream_info_set_media_type_internal_method, (jint) codec->codec_type);
-		(*env)->CallVoidMethod(env, stream_info,
-				stream_info_set_stream_number_method, (jint) i);
-
-		while (err == ERROR_NO_ERROR
-				&& (tag = av_dict_get(metadaat, "", tag, AV_DICT_IGNORE_SUFFIX))
-						!= NULL) {
-			jobject key = (*env)->NewStringUTF(env, tag->key);
-			if (key == NULL) {
-				err = -ERROR_COULD_NOT_ALLOCATE_MEMORY;
-				break;
-			}
-			jobject value = (*env)->NewStringUTF(env, tag->value);
-			if (value == NULL) {
-				err = -ERROR_COULD_NOT_ALLOCATE_MEMORY;
-				goto while_free_key;
-			}
-
-			jobject previous = (*env)->CallObjectMethod(env, map,
-					map_put_method, key, value);
-			if (previous != NULL) {
-				(*env)->DeleteLocalRef(env, previous);
-			}
-			(*env)->DeleteLocalRef(env, value);
-while_free_key:
-			(*env)->DeleteLocalRef(env, key);
-		}
-
-		(*env)->CallVoidMethod(env, stream_info,
-				stream_info_set_metadata_method, map);
-		(*env)->DeleteLocalRef(env, map);
-
-		(*env)->SetObjectArrayElement(env, array, i, stream_info);
-loop_free_stream_info:
-		(*env)->DeleteLocalRef(env, stream_info);
-	}
-
-	if (err == ERROR_NO_ERROR) {
-		(*env)->CallVoidMethod(env, thiz, player->player_set_stream_info,
-				array);
-	}
-
-	(*env)->DeleteLocalRef(env, array);
-free_map_class:
-	(*env)->DeleteLocalRef(env, map_class);
-	(*env)->DeleteLocalRef(env, hash_map_class);
-	(*env)->DeleteLocalRef(env, stream_info_class);
-	return err;
 }
 
 int player_alloc_frames_free(Player *player) {
@@ -1621,7 +1506,6 @@ void player_stop_impl(State * state) {
 	player_prepare_rgb_frames_free(state);
 	player_alloc_queues_free(state);
 	player_alloc_frames_free(player);
-	player_print_report_video_streams_free(state->env, state->thiz, player);
 	player_find_streams_free(player);
 	player_open_input_free(player);
 	player_create_context_free(player);
@@ -1716,7 +1600,6 @@ int player_set_data_source(State *state, const char *file_path,
 	player->stream_indexs[AVMEDIA_TYPE_SUBTITLE] = subtitle_index;
 	memset(st_index, -1, sizeof(st_index));
 
-	// trying decode video
 	if ((err = player_create_context(player)) < 0)
 		goto error;
 
@@ -1724,10 +1607,6 @@ int player_set_data_source(State *state, const char *file_path,
 		goto error;
 
 	if ((err = player_find_stream_info(player)) < 0)
-		goto error;
-
-	if ((err = player_print_report_video_streams(state->env, state->thiz,
-			player)) < 0)
 		goto error;
 
 	ic = player->format_ctx;
@@ -1784,7 +1663,6 @@ error:
 	player_prepare_rgb_frames_free(state);
 	player_alloc_queues_free(state);
 	player_alloc_frames_free(player);
-	player_print_report_video_streams_free(state->env, state->thiz, player);
 	player_find_streams_free(player);
 	player_open_input_free(player);
 	player_create_context_free(player);
@@ -1800,7 +1678,7 @@ void jni_player_seek(JNIEnv *env, jobject thiz, jint position) {
 	pthread_mutex_lock(&player->mutex_operation);
 	if (!player->playing) {
 		LOGI(1, "jni_player_seek could not seek while not playing");
-		throw_exception(env, not_playing_exception_class_path_name,
+		throw_exception(env, not_playing_exception_class_path,
 				"Could not pause while not playing");
 		goto end;
 	}
@@ -1822,7 +1700,7 @@ void jni_player_pause(JNIEnv *env, jobject thiz) {
 
 	if (!player->playing) {
 		LOGI(1, "jni_player_pause could not pause while not playing");
-		throw_exception(env, not_playing_exception_class_path_name,
+		throw_exception(env, not_playing_exception_class_path,
 				"Could not pause while not playing");
 		goto end;
 	}
@@ -1852,7 +1730,7 @@ void jni_player_resume(JNIEnv *env, jobject thiz) {
 
 	if (!player->playing) {
 		LOGI(1, "jni_player_resume could not pause while not playing");
-		throw_exception(env, not_playing_exception_class_path_name,
+		throw_exception(env, not_playing_exception_class_path,
 				"Could not resume while not playing");
 		goto end;
 	}
@@ -1881,9 +1759,9 @@ end:
 }
 
 void jni_player_read_dictionary(JNIEnv *env, AVDictionary **dictionary, jobject jdictionary) {
-	jclass map_class = (*env)->FindClass(env, map_class_path_name);
-	jclass set_class = (*env)->FindClass(env, set_class_path_name);
-	jclass iterator_class = (*env)->FindClass(env, iterator_class_path_name);
+	jclass map_class = (*env)->FindClass(env, map_class_path);
+	jclass set_class = (*env)->FindClass(env, set_class_path);
+	jclass iterator_class = (*env)->FindClass(env, iterator_class_path);
 
 	jmethodID map_key_set_method = java_get_method(env, map_class, map_key_set);
 	jmethodID map_get_method = java_get_method(env, map_class, map_get);
@@ -1977,7 +1855,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 	}
 
 	{
-		jclass player_class = (*env)->FindClass(env, player_class_path_name);
+		jclass player_class = (*env)->FindClass(env, player_class_path);
 
 		if (player_class == NULL) {
 			err = ERROR_NOT_FOUND_PLAYER_CLASS;
@@ -1985,7 +1863,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 		}
 
 		jfieldID player_m_native_player_field = java_get_field(env,
-				player_class_path_name, player_m_native_player);
+				player_class_path, player_m_native_player);
 		if (player_m_native_player_field == NULL) {
 			err = ERROR_NOT_FOUND_M_NATIVE_PLAYER_FIELD;
 			goto free_player;
@@ -2015,19 +1893,12 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 			goto free_player;
 		}
 
-		player->player_set_stream_info = java_get_method(env,
-				player_class, player_set_stream_info);
-		if (player->player_set_stream_info == NULL) {
-			err = ERROR_NOT_FOUND_SET_STREAM_INFO_METHOD;
-			goto free_player;
-		}
-
 		(*env)->DeleteLocalRef(env, player_class);
 	}
 
 	{
 		jclass audio_track_class = (*env)->FindClass(env,
-				android_track_class_path_name);
+				android_track_class_path);
 		if (audio_track_class == NULL) {
 			err = ERROR_NOT_FOUND_AUDIO_TRACK_CLASS;
 			goto free_player;

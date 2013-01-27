@@ -21,7 +21,7 @@
 
 #include <libavutil/audioconvert.h>
 
-static char *player_class_path_name = "net/uplayer/ffmpeg/FFmpegPlayer";
+static char *player_class_path = "net/uplayer/ffmpeg/FFmpegPlayer";
 
 enum Msgs {
 	MSG_NONE = 0, MSG_STOP = 1
