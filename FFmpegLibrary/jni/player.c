@@ -221,7 +221,7 @@ int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
 	Player *player = decoder_data->player;
 	int err = ERROR_NO_ERROR;
 	int ret;
-	AVCodecContext *c = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
+	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
 	AVStream *stream = player->input_streams[AVMEDIA_TYPE_AUDIO];
 	LOGI(10, "player_write_audio Writing audio frame")
 
@@ -237,8 +237,8 @@ int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
 		player->audio_clock = av_q2d(stream->time_base) * pts;
 	} else {
 		player->audio_clock += (double) original_data_size
-				/ (c->channels * c->sample_rate
-						* av_get_bytes_per_sample(c->sample_fmt));
+				/ (ctx->channels * ctx->sample_rate
+						* av_get_bytes_per_sample(ctx->sample_fmt));
 	}
 	player->audio_write_time = av_gettime();
 	pthread_cond_broadcast(&player->cond_queue);
@@ -286,11 +286,6 @@ QueueCheckFuncRet player_decode_queue_check(Queue *queue, DecoderData *decoderDa
 		return QUEUE_CHECK_FUNC_RET_SKIP;
 	}
 	return QUEUE_CHECK_FUNC_RET_TEST;
-}
-
-void player_decode_audio_flush(DecoderData * decoder_data, JNIEnv * env) {
-	Player *player = decoder_data->player;
-	(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
 }
 
 int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
@@ -348,26 +343,6 @@ int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketData *pa
 		return err;
 	}
 	return 0;
-}
-
-void player_decode_video_flush(DecoderData * decoder_data, JNIEnv * env) {
-	Player *player = decoder_data->player;
-	if (!player->rendering) {
-		LOGI(2, "player_decode_video not rendering flushing rgb_video_queue");
-		VideoRGBFrameElem *elem;
-		while ((elem = queue_pop_start_impl_non_block(
-				player->rgb_video_queue)) != NULL) {
-			queue_pop_finish_impl(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
-		}
-	} else {
-		LOGI(2,
-				"player_decode_video rendering sending rgb_video_queue flush request");
-		player->flush_video_play = TRUE;
-		pthread_cond_broadcast(&player->cond_queue);
-		LOGI(2, "player_decode_video waiting for rgb_video_queue flush");
-		while (player->flush_video_play)
-			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
-	}
 }
 
 int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
@@ -661,9 +636,24 @@ flush:
 		LOGI(2, "player_decode[%d] flushing", decoder_data->stream_type);
 
 		if (codec_type == AVMEDIA_TYPE_AUDIO) {
-			player_decode_audio_flush(decoder_data, env);
+			(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
 		} else if (codec_type == AVMEDIA_TYPE_VIDEO) {
-			player_decode_video_flush(decoder_data, env);
+			if (!player->rendering) {
+				LOGI(2, "player_decode_video not rendering flushing rgb_video_queue");
+				VideoRGBFrameElem *elem;
+				while ((elem = queue_pop_start_impl_non_block(
+						player->rgb_video_queue)) != NULL) {
+					queue_pop_finish_impl(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
+				}
+			} else {
+				LOGI(2,
+						"player_decode_video rendering sending rgb_video_queue flush request");
+				player->flush_video_play = TRUE;
+				pthread_cond_broadcast(&player->cond_queue);
+				LOGI(2, "player_decode_video waiting for rgb_video_queue flush");
+				while (player->flush_video_play)
+					pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
+			}
 		}
 		LOGI(2, "player_decode[%d] flushed", decoder_data->stream_type);
 
