@@ -269,6 +269,7 @@ function build_ffmpeg()
 	    --enable-demuxer=flv \
 	    --enable-demuxer=mov \
 	    --enable-demuxer=hls \
+	    --enable-demuxer=mpegts \
 	    --enable-muxer=flv \
 	    --enable-protocol=file \
 	    --enable-protocol=tcp \
