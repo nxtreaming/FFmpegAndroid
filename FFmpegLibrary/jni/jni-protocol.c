@@ -23,6 +23,12 @@
 
 #include "jni-protocol.h"
 
+#define LOG_LEVEL 2
+#define LOG_TAG "AVEngine:jni-protocol.c"
+#define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
+#define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
+#define LOGW(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__);}
+
 static const char *jni_reader_class_name = "net/uplayer/ffmpeg/JniReader";
 static JavaVM *global_jvm;
 

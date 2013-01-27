@@ -16,9 +16,16 @@
  *
  */
 
+#include <android/log.h>
 #include <jni.h>
 
 #include "helpers.h"
+
+#define LOG_LEVEL 2
+#define LOG_TAG "AVEngine:helper.c"
+#define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
+#define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
+#define LOGW(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__);}
 
 jfieldID java_get_field(JNIEnv *env, char * class_name, JavaField field) {
 	jclass clazz = (*env)->FindClass(env, class_name);
