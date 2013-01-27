@@ -311,7 +311,6 @@ int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
 	if (exc) {
 		err = -ERROR_PLAYING_AUDIO;
 		LOGE(3, "Could not write audio track: reason in exception");
-		// TODO maybe release exc
 		goto free_local_ref;
 	}
 	if (ret < 0) {
@@ -744,7 +743,6 @@ end:
 	free(decoder_data);
 	decoder_data = NULL;
 
-	// TODO do something with err
 	return NULL;
 }
 
@@ -913,7 +911,6 @@ exit_loop:
 		goto detach_current_thread;
 
 seek_loop:
-		// setting stream thet will be used as a base for seeking
 		seek_stream_index = player->stream_indexs[AVMEDIA_TYPE_VIDEO];
 		seek_stream = player->input_streams[AVMEDIA_TYPE_VIDEO];
 
@@ -922,7 +919,6 @@ seek_loop:
 			seek_stream->time_base);
 		LOGI(3, "player_read_stream seeking to: %ds, time_base: %lld", player->seek_position, seek_target);
 
-		// seeking
 		if (av_seek_frame(player->format_ctx, seek_stream_index, seek_target, 0) < 0) {
 			// seeking error - trying to play movie without it
 			LOGE(1, "Error while seeking");
@@ -949,13 +945,11 @@ seek_loop:
 			pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 
 		LOGI(3, "player_read_stream flushing internal codec buffers");
-		// flush internal buffers
 		for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 			if (player->input_codec_ctxs[i])
 				avcodec_flush_buffers(player->input_codec_ctxs[i]);
 		}
 
-		// finishing seeking
 		player->seek_position = DO_NOT_SEEK;
 		pthread_cond_broadcast(&player->cond_queue);
 		LOGI(3, "player_read_stream ending seek");
@@ -1006,9 +1000,9 @@ void player_free_video_rgb_frame(State *state, VideoRGBFrameElem *elem) {
 
 	LOGI(7, "player_free_video_rgb_frame deleting global ref");
 	(*env)->DeleteGlobalRef(env, elem->jbitmap);
-	LOGI(7, "player_free_video_rgb_frame fryiing video frame");
+	LOGI(7, "player_free_video_rgb_frame freeing video frame");
 	av_free(elem->frame);
-	LOGI(7, "player_free_video_rgb_frame fryiing elem");
+	LOGI(7, "player_free_video_rgb_frame freeing elem");
 	free(elem);
 	LOGI(7, "player_free_video_rgb_frame fried");
 }
@@ -1090,7 +1084,7 @@ void player_update_time(State *state, double time) {
 	}
 	player->last_updated_time = time_int;
 
-	// because video duation can be estimate
+	// because video duration can be estimate
 	// we have to ensure that it will not be smaller
 	// than current time
 	if (time_int > player->video_duration)
@@ -1245,7 +1239,6 @@ void player_create_audio_track_free(Player *player, State *state) {
 }
 
 int player_create_audio_track(Player *player, State *state) {
-	//creating audio track
 	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
 	int sample_rate = ctx->sample_rate;
 	int channels = ctx->channels;
@@ -1618,25 +1611,30 @@ int player_set_data_source(State *state, const char *file_path,
 	st_index[AVMEDIA_TYPE_AUDIO] = av_find_best_stream(ic, AVMEDIA_TYPE_AUDIO,
 		player->stream_indexs[AVMEDIA_TYPE_AUDIO], -1, NULL, 0);
 
-	if (st_index[AVMEDIA_TYPE_AUDIO] >= 0)
-		stream_component_open(player, st_index[AVMEDIA_TYPE_AUDIO]);
-	if (st_index[AVMEDIA_TYPE_VIDEO] >= 0)
-		stream_component_open(player, st_index[AVMEDIA_TYPE_VIDEO]);
+	if (st_index[AVMEDIA_TYPE_AUDIO] >= 0) {
+		err = stream_component_open(player, st_index[AVMEDIA_TYPE_AUDIO]);
+		if (err < 0)
+			goto error;
+		err = player_create_audio_track(player, state);
+		if (err < 0)
+			goto error;
+	}
+	if (st_index[AVMEDIA_TYPE_VIDEO] >= 0) {
+		err = stream_component_open(player, st_index[AVMEDIA_TYPE_VIDEO]);
+		if (err < 0)
+			goto error;
+		DecoderState video_decoder_state = { player->video_index, AVMEDIA_TYPE_VIDEO, player, state->env, state->thiz };
+		err = player_prepare_rgb_frames(&video_decoder_state, state);
+		if (err < 0)
+			goto error;
+		if ((err = player_preapre_sws_context(player)) < 0)
+			goto error;
+	}
 
 	if ((err = player_alloc_frames(player)) < 0)
 		goto error;
 
 	if ((err = player_alloc_queues(state)) < 0)
-		goto error;
-
-	DecoderState video_decoder_state = { player->video_index, AVMEDIA_TYPE_VIDEO, player, state->env, state->thiz };
-	if ((err = player_prepare_rgb_frames(&video_decoder_state, state)) < 0)
-		goto error;
-
-	if ((err = player_preapre_sws_context(player)) < 0)
-		goto error;
-
-	if ((err = player_create_audio_track(player, state)) < 0)
 		goto error;
 
 	player_get_video_duration(player);
