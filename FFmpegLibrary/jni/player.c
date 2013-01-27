@@ -868,7 +868,9 @@ seek_loop:
 		player_assign_to_no_boolean_array(player, player->flush_streams, TRUE);
 		LOGI(3, "player_read_stream flushing audio")
 		// flush audio buffer
-		(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
+		if (player->audio_track) {
+			(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
+		}
 		LOGI(3, "player_read_stream flushed audio");
 		pthread_cond_broadcast(&player->cond_queue);
 
@@ -1641,8 +1643,11 @@ void jni_player_pause(JNIEnv *env, jobject thiz) {
 		goto do_nothing;
 	LOGI(3, "jni_player_pause Pausing");
 	player->pause = TRUE;
-	(*env)->CallVoidMethod(env, player->audio_track,
-			player->audio_track_pause);
+
+	if (player->audio_track) {
+		(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_pause);
+	}
+
 	player->audio_pause_time = av_gettime();
 
 	pthread_cond_broadcast(&player->cond_queue);
@@ -1668,8 +1673,10 @@ void jni_player_resume(JNIEnv *env, jobject thiz) {
 	if (!player->pause)
 		goto do_nothing;
 	player->pause = FALSE;
-	(*env)->CallVoidMethod(env, player->audio_track,
-			player->audio_track_play);
+
+	if (player->audio_track) {
+		(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_play);
+	}
 
 	player->audio_resume_time = av_gettime();
 	if (player->audio_write_time < player->audio_pause_time) {
