@@ -185,6 +185,38 @@ function build_fribidi()
 	cd ..
 }
 
+function build_fdkaac()
+{
+	LOCAL_CFLAGS=$1
+	PREFIX=$2
+
+	echo "Building fdk-aac..."
+	cd fdk-aac
+
+	./configure \
+	    --host=arm-linux \
+	    --with-sysroot=${SYSROOT} \
+	    --prefix=$(pwd)/${PREFIX} \
+	    --disable-shared \
+	    --enable-static \
+	    --with-pic=no \
+	    CC="${CROSS_PREFIX}gcc --sysroot=${SYSROOT}" \
+	    CXX="${CROSS_PREFIX}g++ --sysroot=${SYSROOT}" \
+	    RANLIB="${CROSS_PREFIX}ranlib" \
+	    AR="${CROSS_PREFIX}ar" \
+	    AR_FLAGS=rcu \
+	    STRIP="${CROSS_PREFIX}strip" \
+	    NM="${CROSS_PREFIX}nm" \
+	    CFLAGS="-O3 ${LOCAL_CFLAGS} --sysroot=${SYSROOT}" \
+	    CXXFLAGS="-O3 ${LOCAL_CFLAGS} --sysroot=${SYSROOT}" \
+	    || exit 1
+
+	    make clean || exit 1
+	    make V=1 -j4 install || exit 1
+
+	    cd ..
+}
+
 function build_ffmpeg()
 {
 	CFLAGS=$1
@@ -200,7 +232,7 @@ function build_ffmpeg()
 	    --sysroot=${SYSROOT} \
 	    --enable-cross-compile \
 	    --cross-prefix=$CROSS_PREFIX \
-	    --prefix=$PREFIX \
+	    --prefix=$(pwd)/$PREFIX \
 	    --arch=armv7-a \
 	    --extra-cflags="-O3 -fpic -DANDROID -DHAVE_SYS_UIO_H=1 -Dipv6mr_interface=ipv6mr_ifindex -fasm -Wno-psabi -fno-short-enums -fno-strict-aliasing -finline-limit=300 $CFLAGS -I${PREFIX}/include" \
 	    --extra-ldflags="-Wl,-rpath-link=${SYSROOT}/usr/lib -L${SYSROOT}/usr/lib -nostdlib -L${PREFIX}/lib" \
@@ -209,18 +241,31 @@ function build_ffmpeg()
 	    --enable-static \
 	    --enable-pic \
 	    --enable-runtime-cpudetect \
-	    --disable-everything \
-	    --disable-encoders \
-	    --disable-decoders \
-	    --enable-libx264 \
-	    --enable-encoder=libx264 \
-	    --disable-muxers \
-	    --disable-demuxers \
+	    --enable-asm \
+	    --enable-armv5te \
+	    --enable-armv6 \
+	    --enable-armv6t2 \
+	    --enable-vfp \
+	    --enable-neon \
+	    --enable-thumb \
 	    --disable-avdevice \
 	    --disable-avfilter \
 	    --disable-avresample \
-	    --disable-parsers \
-	    --disable-protocols \
+	    --disable-postproc \
+	    --disable-swscale-alpha \
+	    --disable-dct \
+	    --disable-dwt \
+	    --disable-lsp \
+	    --disable-lzo \
+	    --disable-mdct \
+	    --disable-rdft \
+	    --disable-fft \
+	    --disable-everything \
+	    --enable-libfdk-aac \
+	    --enable-decoder=libfdk_aac \
+	    --enable-encoder=libfdk_aac \
+	    --enable-libx264 \
+	    --enable-encoder=libx264 \
 	    --enable-demuxer=flv \
 	    --enable-demuxer=mov \
 	    --enable-demuxer=hls \
@@ -230,7 +275,6 @@ function build_ffmpeg()
 	    --enable-protocol=hls \
 	    --enable-protocol=http \
 	    --enable-decoder=h264 \
-	    --enable-decoder=aac \
 	    --enable-parser=h264 \
 	    --enable-parser=aac \
 	    --enable-zlib \
@@ -240,7 +284,6 @@ function build_ffmpeg()
 	    --enable-nonfree \
 	    --enable-version3 \
 	    --enable-memalign-hack \
-	    --enable-asm \
 	    || exit 1
 
 	make clean || exit 1
@@ -257,15 +300,16 @@ function build_one()
 	echo "Building one..."
 	cd ffmpeg
 
-	${CROSS_PREFIX}ld -rpath-link=${SYSROOT}/usr/lib -L${SYSROOT}/usr/lib -L${PREFIX}/lib -soname $SONAME -shared -nostdlib -z noexecstack -Bsymbolic --whole-archive --no-undefined -o ${PREFIX}/${SONAME} -lavformat -lavcodec -lswresample -lswscale -lavutil -lx264 -lc -lm -lz -ldl -llog --dynamic-linker=/system/bin/linker -zmuldefs ${NDK}/toolchains/arm-linux-androideabi-4.6/prebuilt/${OS}-x86/lib/gcc/arm-linux-androideabi/4.6/libgcc.a || exit 1
+	${CROSS_PREFIX}ld -rpath-link=${SYSROOT}/usr/lib -L${SYSROOT}/usr/lib -L${PREFIX}/lib -soname $SONAME -shared -nostdlib -z noexecstack -Bsymbolic --whole-archive --no-undefined -o ${PREFIX}/${SONAME} -lavformat -lavcodec -lswresample -lswscale -lavutil -lx264 -lfdk-aac -lc -lm -lz -ldl -llog --dynamic-linker=/system/bin/linker -zmuldefs ${NDK}/toolchains/arm-linux-androideabi-4.6/prebuilt/${OS}-x86/lib/gcc/arm-linux-androideabi/4.6/libgcc.a || exit 1
 
 	cd ..
 }
 
 #arm v7vfpv3
-OPTIMIZE_CFLAGS="-mfloat-abi=softfp -mfpu=vfpv3-d16 -marm -march=armv7-a"
+OPTIMIZE_CFLAGS="-mfloat-abi=softfp -mfpu=vfpv3-d16 -marm -march=armv7-a -mthumb -D__thumb__"
 PREFIX=${PREFIX_BASE}/armeabi-v7a
 SONAME=libffmpeg.so
+build_fdkaac "$OPTIMIZE_CFLAGS" "$PREFIX"
 build_x264 "$OPTIMIZE_CFLAGS" "$PREFIX"
 build_ffmpeg "$OPTIMIZE_CFLAGS" "$PREFIX"
 build_one "$SONAME" "$PREFIX"
@@ -274,6 +318,7 @@ build_one "$SONAME" "$PREFIX"
 OPTIMIZE_CFLAGS="-mfloat-abi=softfp -mfpu=neon -marm -march=armv7-a -mtune=cortex-a8 -mthumb -D__thumb__"
 PREFIX=${PREFIX_BASE}/armeabi-v7a-neon
 SONAME=libffmpeg-neon.so
+build_fdkaac "$OPTIMIZE_CFLAGS" "$PREFIX"
 build_x264 "$OPTIMIZE_CFLAGS" "$PREFIX"
 build_ffmpeg "$OPTIMIZE_CFLAGS" "$PREFIX"
 build_one "$SONAME" "$PREFIX"
