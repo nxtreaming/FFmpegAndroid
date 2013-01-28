@@ -1095,7 +1095,7 @@ void player_open_stream_free(Player *player, int stream_type) {
 	}
 }
 
-void player_find_streams_free(Player *player) {
+void player_free_streams(Player *player) {
 	int i;
 	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 		if (player->input_codec_ctxs[i])
@@ -1113,7 +1113,7 @@ uint64_t player_find_layout_from_channels(int nb_channels) {
 	return (uint64_t) 0;
 }
 
-int player_alloc_frames_free(Player *player) {
+int player_free_frames(Player *player) {
 	int i;
 	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 		if (player->input_frames[i] != NULL) {
@@ -1153,7 +1153,7 @@ int player_alloc_queues(State *state) {
 	return 0;
 }
 
-void player_alloc_queues_free(State *state) {
+void player_free_queues(State *state) {
 	Player *player = state->player;
 	int i;
 	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
@@ -1164,7 +1164,7 @@ void player_alloc_queues_free(State *state) {
 	}
 }
 
-void player_prepare_rgb_frames_free(State *state) {
+void player_free_rgb_frames(State *state) {
 	Player *player = state->player;
 	if (player->rgb_video_queue != NULL) {
 		LOGI(7, "player_set_data_source free_video_frames_queue");
@@ -1203,7 +1203,7 @@ int player_preapre_sws_context(Player *player) {
 	return 0;
 }
 
-void player_preapre_sws_context_free(Player *player) {
+void player_free_sws_context(Player *player) {
 	if (player->sws_context != NULL) {
 		LOGI(7, "player_set_data_source free_sws_context");
 		sws_freeContext(player->sws_context);
@@ -1211,7 +1211,7 @@ void player_preapre_sws_context_free(Player *player) {
 	}
 }
 
-void player_create_audio_track_free(Player *player, State *state) {
+void player_free_audio_track(Player *player, State *state) {
 	if (player->swr_context != NULL) {
 		swr_free(&player->swr_context);
 		player->swr_context = NULL;
@@ -1328,7 +1328,7 @@ void player_get_video_duration(Player *player) {
 	}
 }
 
-int player_start_decoding_threads(Player *player) {
+int player_create_decoding_threads(Player *player) {
 	pthread_attr_t attr;
 	int ret;
 	int i;
@@ -1370,7 +1370,7 @@ end:
 	return err;
 }
 
-int player_start_decoding_threads_free(Player *player) {
+int player_free_decoding_threads(Player *player) {
 	int i, ret, err = 0;
 
 	if (player->read_stream_thread_created) {
@@ -1393,7 +1393,7 @@ int player_start_decoding_threads_free(Player *player) {
 	return err;
 }
 
-void player_create_context_free(Player *player) {
+void player_free_context(Player *player) {
 	if (player->format_ctx != NULL) {
 		LOGI(7, "player_set_data_source remove_context");
 		av_freep(&player->format_ctx);
@@ -1409,7 +1409,7 @@ int player_create_context(Player *player) {
 	return 0;
 }
 
-void player_open_input_free(Player *player) {
+void player_free_input(Player *player) {
 	if (player->input_inited) {
 		LOGI(7, "player_set_data_source close_file");
 		avformat_close_input(&player->format_ctx);
@@ -1490,15 +1490,15 @@ void player_stop_impl(State * state) {
 
 	LOGI(3, "player_stop_impl stopping...");
 	player_signal_stop(player);
-	player_start_decoding_threads_free(player);
-	player_create_audio_track_free(player, state);
-	player_preapre_sws_context_free(player);
-	player_prepare_rgb_frames_free(state);
-	player_alloc_queues_free(state);
-	player_alloc_frames_free(player);
-	player_find_streams_free(player);
-	player_open_input_free(player);
-	player_create_context_free(player);
+	player_free_decoding_threads(player);
+	player_free_audio_track(player, state);
+	player_free_sws_context(player);
+	player_free_rgb_frames(state);
+	player_free_queues(state);
+	player_free_frames(player);
+	player_free_streams(player);
+	player_free_input(player);
+	player_free_context(player);
 	LOGI(3, "player_stop_impl stopped...");
 }
 
@@ -1638,7 +1638,7 @@ int player_set_data_source(State *state, const char *file_path,
 
 	player_play_prepare(player);
 
-	if ((err = player_start_decoding_threads(player)) < 0) {
+	if ((err = player_create_decoding_threads(player)) < 0) {
 		goto error;
 	}
 
@@ -1650,15 +1650,15 @@ error:
 	LOGI(3, "player_set_data_source error");
 
 	player_signal_stop(player);
-	player_start_decoding_threads_free(player);
-	player_create_audio_track_free(player, state);
-	player_preapre_sws_context_free(player);
-	player_prepare_rgb_frames_free(state);
-	player_alloc_queues_free(state);
-	player_alloc_frames_free(player);
-	player_find_streams_free(player);
-	player_open_input_free(player);
-	player_create_context_free(player);
+	player_free_decoding_threads(player);
+	player_free_audio_track(player, state);
+	player_free_sws_context(player);
+	player_free_rgb_frames(state);
+	player_free_queues(state);
+	player_free_frames(player);
+	player_free_streams(player);
+	player_free_input(player);
+	player_free_context(player);
 end:
 	LOGI(7, "player_set_data_source end");
 	pthread_mutex_unlock(&player->mutex_operation);
@@ -2185,7 +2185,7 @@ void jni_player_release_frame(JNIEnv *env, jobject thiz) {
 #ifdef MEASURE_TIME
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &render_frame_stop);
 	struct timespec diff = timespec_diff(render_frame_start, render_frame_stop);
-	LOGI(7, "render timediff: %d.%9ld",diff.tv_sec, diff.tv_nsec);
+	LOGI(7, "render time diff: %d.%9ld",diff.tv_sec, diff.tv_nsec);
 #endif
 	queue_pop_finish(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
 	LOGI(7, "jni_player_release_frame rendered");
