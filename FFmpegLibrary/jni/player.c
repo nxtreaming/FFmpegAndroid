@@ -1444,7 +1444,8 @@ int player_open_input(Player *player, const char *file_path, AVDictionary *dicti
 	player->format_ctx = ic;
 	player->open_time = 0;
 	player->input_inited = TRUE;
-	update_external_clock_pts(player, (double)AV_NOPTS_VALUE); 	update_external_clock_speed(player, 1.0);
+	update_external_clock_pts(player, av_gettime()/(double)AV_NOPTS_VALUE);
+	update_external_clock_speed(player, 1.0);
 	player->video_current_pts_drift = -av_gettime() / 1000000.0;
 
 	return ERROR_NO_ERROR;
@@ -1698,6 +1699,7 @@ void jni_player_pause(JNIEnv *env, jobject thiz) {
 	if (player->pause)
 		goto do_nothing;
 	LOGI(3, "jni_player_pause Pausing");
+	update_external_clock_pts(player, get_external_clock(player));
 	player->pause = TRUE;
 
 	if (player->audio_track) {
@@ -1705,7 +1707,6 @@ void jni_player_pause(JNIEnv *env, jobject thiz) {
 	}
 
 	player->audio_pause_time = av_gettime();
-	update_external_clock_pts(player, get_external_clock(player));
 
 	pthread_cond_broadcast(&player->cond_queue);
 
@@ -1742,6 +1743,7 @@ void jni_player_resume(JNIEnv *env, jobject thiz) {
 		player->audio_write_time += player->audio_resume_time - player->audio_pause_time;
 	}
 	player->video_current_pts_drift = player->video_current_pts - av_gettime() / 1000000.0;
+	update_external_clock_pts(player, get_external_clock(player));
 
 	pthread_cond_broadcast(&player->cond_queue);
 
@@ -2116,16 +2118,19 @@ test:
 		double pts_time_diff_d = elem->time - player->audio_clock;
 		int64_t sleep_time = (int64_t) (pts_time_diff_d * 1000.0)
 				- (int64_t) (time_diff / 1000L);
-		if (!player->audio_track) {
-			sleep_time = (get_video_clock(player) - get_external_clock(player)) * 1000LL;
-		}
-		LOGI(9,
+		LOGI(1,
 				"jni_player_render_frame current_time: "
 				"%lld, write_time: %lld, time_diff: %lld, "
 				"elem->time: %f, player->audio_clock: %f "
 				"sleep_time: %lld",
 				current_time, player->audio_write_time, time_diff,
 				elem->time, player->audio_clock, sleep_time);
+		if (!player->audio_track) {
+			double video_clock = get_video_clock(player);
+			sleep_time = (elem->time - video_clock) * 1000LL;
+			LOGI(1,"jni_player_render_frame: video only mode:video_clock %f sleep_time %lld",
+					video_clock, sleep_time);
+		}
 
 		if (sleep_time <= MIN_SLEEP_TIME_MS) {
 			break;
