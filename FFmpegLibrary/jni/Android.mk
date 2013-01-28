@@ -72,7 +72,7 @@ endif
 include $(CLEAR_VARS)
 LOCAL_ALLOW_UNDEFINED_SYMBOLS=false
 LOCAL_MODULE := ffmpeg-jni
-LOCAL_CFLAGS += -Wall
+LOCAL_CFLAGS += -Wall -g
 LOCAL_SRC_FILES := ffmpeg-jni.c player.c queue.c helpers.c
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/ffmpeg_build/$(TARGET_ARCH_ABI)/include
 LOCAL_SHARED_LIBRARY := ffmpeg-prebuilt
@@ -110,7 +110,7 @@ ifdef FEATURE_NEON
 include $(CLEAR_VARS)
 LOCAL_ALLOW_UNDEFINED_SYMBOLS=false
 LOCAL_MODULE := ffmpeg-jni-neon
-LOCAL_CFLAGS += -Wall
+LOCAL_CFLAGS += -Wall -g
 LOCAL_SRC_FILES := ffmpeg-jni.c player.c queue.c helpers.c
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/ffmpeg_build/$(TARGET_ARCH_ABI)-neon/include
 LOCAL_SHARED_LIBRARY := ffmpeg-prebuilt-neon
@@ -137,7 +137,7 @@ ifdef MODULE_JNI_PROTOCOL
 	LOCAL_SRC_FILES += jni-protocol.c
 endif
 
-LOCAL_LDLIBS := -llog -ljnigraphics -lz -lm -g $(LOCAL_PATH)/ffmpeg_build/$(TARGET_ARCH_ABI)-neon/libffmpeg-neon.so
+LOCAL_LDLIBS := -llog -ljnigraphics -lz -lm $(LOCAL_PATH)/ffmpeg_build/$(TARGET_ARCH_ABI)-neon/libffmpeg-neon.so
 include $(BUILD_SHARED_LIBRARY)
 endif
 

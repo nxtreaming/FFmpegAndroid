@@ -784,6 +784,8 @@ void * player_read_stream(void *data) {
 		goto end;
 	}
 
+	// MUST initialize it
+	av_init_packet(pkt);
 	for (;;) {
 		while (player->pause && !player->stop) {
 			usleep(10000);
@@ -954,8 +956,7 @@ skip_loop:
 	}
 
 detach_current_thread:
-	ret = (*player->get_javavm)->DetachCurrentThread(
-			player->get_javavm);
+	ret = (*player->get_javavm)->DetachCurrentThread(player->get_javavm);
 	if (ret && !err)
 		err = ERROR_COULD_NOT_DETACH_THREAD;
 end:
@@ -1087,19 +1088,16 @@ void player_update_time(State *state, double time) {
 	player_update_current_time(state, FALSE);
 }
 
-void player_open_stream_free(Player *player, int stream_type) {
-	AVCodecContext **ctx = &player->input_codec_ctxs[stream_type];
-	if (*ctx != NULL) {
-		avcodec_close(*ctx);
-		*ctx = NULL;
-	}
-}
-
 void player_free_streams(Player *player) {
 	int i;
 	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
-		if (player->input_codec_ctxs[i])
-			player_open_stream_free(player, i);
+		if (player->input_codec_ctxs[i]) {
+			avcodec_close(player->input_codec_ctxs[i]);
+			player->input_codec_ctxs[i] = NULL;
+		}
+		player->input_streams[i] = NULL;
+		player->input_frames[i] = NULL;
+		player->stream_indexs[i] = -1;
 	}
 	player->video_index = -1;
 	player->audio_index = -1;
@@ -1374,7 +1372,9 @@ int player_free_decoding_threads(Player *player) {
 	int i, ret, err = 0;
 
 	if (player->read_stream_thread_created) {
+		LOGI(3, "pthread_join: read_stream_thread begin");
 		ret = pthread_join(player->read_stream_thread, NULL);
+		LOGI(3, "pthread_join: read_stream_thread end");
 		player->read_stream_thread_created = FALSE;
 		if (ret) {
 			err = ERROR_COULD_NOT_JOIN_PTHREAD;
@@ -1383,7 +1383,9 @@ int player_free_decoding_threads(Player *player) {
 
 	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 		if (player->decode_threads_created[i]) {
+			LOGI(3, "pthread_join: decode_threads[%d] begin", i);
 			ret = pthread_join(player->decode_threads[i], NULL);
+			LOGI(3, "pthread_join: decode_threads[%d] end", i);
 			player->decode_threads_created[i] = FALSE;
 			if (ret) {
 				err = ERROR_COULD_NOT_JOIN_PTHREAD;
