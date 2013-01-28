@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
+#include <unistd.h>
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -352,7 +353,7 @@ int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketData *pa
 	int len = avcodec_decode_audio4(ctx, frame, &got_frame_ptr, packet);
 	if (len < 0) {
 		LOGE(1, "Fail decoding audio %d\n", len);
-		return -ERROR_WHILE_DECODING_VIDEO;
+		return -ERROR_WHILE_DECODING_AUDIO_FRAME;
 	}
 	if (!got_frame_ptr) {
 		LOGI(3, "player_decode_audio Audio frame not finished\n");
@@ -608,10 +609,10 @@ pop:
 			player_decode_queue_check(queue, decoder_data, &interrupt_ret);
 			// MUST wake up from PAUSE --> SEEK/STOP
 			if (interrupt_ret == DECODE_CHECK_MSG_FLUSH) {
-				LOGI(3, "player_decode[%d] interrupted by FLUSH from PAUSE", decoder_data->stream_type);
+				LOGI(2, "player_decode[%d] interrupted by FLUSH from PAUSE", decoder_data->stream_type);
 				goto flush;
 			} else if (interrupt_ret == DECODE_CHECK_MSG_STOP) {
-				LOGI(3, "player_decode[%d] interrupted by STOP from PAUSE", decoder_data->stream_type);
+				LOGI(2, "player_decode[%d] interrupted by STOP from PAUSE", decoder_data->stream_type);
 				goto stop;
 			}
 			pthread_cond_timeout_np(&player->cond_queue, &player->mutex_queue, 10);
@@ -784,9 +785,12 @@ void * player_read_stream(void *data) {
 	}
 
 	for (;;) {
-		//while (player->pause) {
-		//	pthread_cond_timeout_np(&player->cond_queue, &player->mutex_queue, 10);
-		//}
+		while (player->pause && !player->stop) {
+			usleep(10000);
+			// MUST wake up from PAUSE --> SEEK/STOP
+			if (player->seek_position != DO_NOT_SEEK)
+				goto seek_loop;
+		}
 		int ret = av_read_frame(player->format_ctx, pkt);
 		if (ret < 0) {
 			pthread_mutex_lock(&player->mutex_queue);
@@ -820,7 +824,6 @@ void * player_read_stream(void *data) {
 			pthread_mutex_unlock(&player->mutex_queue);
 		}
 
-		LOGI(8, "player_read_stream Read frame");
 		pthread_mutex_lock(&player->mutex_queue);
 		if (player->stop) {
 			LOGI(4, "player_read_stream stopping");
@@ -842,7 +845,7 @@ parse_frame:
 		}
 
 		if (queue == NULL) {
-			LOGI(3, "player_read_stream stream not found");
+			LOGI(2, "player_read_stream stream not found");
 			goto skip_loop;
 		}
 
@@ -2118,7 +2121,7 @@ test:
 		double pts_time_diff_d = elem->time - player->audio_clock;
 		int64_t sleep_time = (int64_t) (pts_time_diff_d * 1000.0)
 				- (int64_t) (time_diff / 1000L);
-		LOGI(1,
+		LOGI(9,
 				"jni_player_render_frame current_time: "
 				"%lld, write_time: %lld, time_diff: %lld, "
 				"elem->time: %f, player->audio_clock: %f "
@@ -2128,7 +2131,7 @@ test:
 		if (!player->audio_track) {
 			double video_clock = get_video_clock(player);
 			sleep_time = (elem->time - video_clock) * 1000LL;
-			LOGI(1,"jni_player_render_frame: video only mode:video_clock %f sleep_time %lld",
+			LOGI(9,"jni_player_render_frame: video only mode:video_clock %f sleep_time %lld",
 					video_clock, sleep_time);
 		}
 
