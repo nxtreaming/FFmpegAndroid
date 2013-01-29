@@ -1395,22 +1395,6 @@ int player_free_decoding_threads(Player *player) {
 	return err;
 }
 
-void player_free_context(Player *player) {
-	if (player->format_ctx != NULL) {
-		LOGI(7, "player_set_data_source remove_context");
-		av_freep(&player->format_ctx);
-	}
-}
-
-int player_create_context(Player *player) {
-	player->format_ctx = avformat_alloc_context();
-	if (player->format_ctx == NULL) {
-		LOGE(1, "Could not create AVContext\n");
-		return -ERROR_COULD_NOT_CREATE_AVCONTEXT;
-	}
-	return 0;
-}
-
 void player_free_input(Player *player) {
 	if (player->input_inited) {
 		LOGI(7, "player_set_data_source close_file");
@@ -1503,7 +1487,6 @@ void player_stop(State * state) {
 	player_free_frames(player);
 	player_free_streams(player);
 	player_free_input(player);
-	player_free_context(player);
 	LOGI(3, "player_stop stopped...");
 
 	pthread_mutex_unlock(&player->mutex_operation);
@@ -1589,9 +1572,6 @@ int player_set_data_source(State *state, const char *file_path,
 	player->stream_indexs[AVMEDIA_TYPE_SUBTITLE] = subtitle_index;
 	memset(st_index, -1, sizeof(st_index));
 
-	if ((err = player_create_context(player)) < 0)
-		goto error;
-
 	if ((err = player_open_input(player, file_path, dictionary)) < 0)
 		goto error;
 
@@ -1658,7 +1638,6 @@ error:
 	player_free_frames(player);
 	player_free_streams(player);
 	player_free_input(player);
-	player_free_context(player);
 end:
 	LOGI(7, "player_set_data_source end");
 	pthread_mutex_unlock(&player->mutex_operation);
