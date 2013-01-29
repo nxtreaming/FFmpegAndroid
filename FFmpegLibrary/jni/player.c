@@ -1827,6 +1827,7 @@ int jni_player_set_data_source(JNIEnv *env, jobject thiz, jstring string,
 }
 
 void jni_player_dealloc(JNIEnv *env, jobject thiz) {
+	LOGI(1, "jni_player_dealloc");
 	Player *player = player_get_player_field(env, thiz);
 
 	(*env)->DeleteGlobalRef(env, player->audio_track_class);
@@ -1840,6 +1841,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 	monstartup("libffmpeg.so");
 #endif
 
+	LOGI(1, "jni_player_init");
 	Player *player = malloc(sizeof(Player));
 	memset(player, 0, sizeof(player));
 	player->audio_index = -1;
