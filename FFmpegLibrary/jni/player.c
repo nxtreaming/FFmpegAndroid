@@ -1563,7 +1563,7 @@ int player_set_data_source(State *state, const char *file_path,
 
 	if (player->playing) {
 	    pthread_mutex_unlock(&player->mutex_operation);
-	    return ERROR_NOT_STOP_LAST_INSTANCE
+	    return ERROR_NOT_STOP_LAST_INSTANCE;
 	}
 
 	player->out_format = AV_PIX_FMT_RGB565;
