@@ -1483,14 +1483,17 @@ void player_play_prepare(Player *player) {
 	pthread_mutex_unlock(&player->mutex_queue);
 }
 
-void player_stop_impl(State * state) {
+void player_stop(State * state) {
 	Player *player = state->player;
+
+	LOGI(3, "player_stop try to stop...");
+	pthread_mutex_lock(&state->player->mutex_operation);
 
 	if (!player->playing)
 		return;
 	player->playing = FALSE;
 
-	LOGI(3, "player_stop_impl stopping...");
+	LOGI(3, "player_stop stopping...");
 	player_signal_stop(player);
 	player_free_decoding_threads(player);
 	player_free_audio_track(player, state);
@@ -1501,14 +1504,9 @@ void player_stop_impl(State * state) {
 	player_free_streams(player);
 	player_free_input(player);
 	player_free_context(player);
-	LOGI(3, "player_stop_impl stopped...");
-}
+	LOGI(3, "player_stop stopped...");
 
-void player_stop(State * state) {
-	LOGI(3, "player_stop stopping...");
-	pthread_mutex_lock(&state->player->mutex_operation);
-	player_stop_impl(state);
-	pthread_mutex_unlock(&state->player->mutex_operation);
+	pthread_mutex_unlock(&player->mutex_operation);
 }
 
 static int stream_component_open(Player *player, int stream_index) {
