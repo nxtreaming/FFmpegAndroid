@@ -790,8 +790,10 @@ void * player_read_stream(void *data) {
 		while (player->pause && !player->stop) {
 			usleep(10000);
 			// MUST wake up from PAUSE --> SEEK/STOP
-			if (player->seek_position != DO_NOT_SEEK)
+			if (player->seek_position != DO_NOT_SEEK) {
+				av_init_packet(pkt);
 				goto seek_loop;
+			}
 		}
 		int ret = av_read_frame(player->format_ctx, pkt);
 		if (ret < 0) {
@@ -808,6 +810,7 @@ void * player_read_stream(void *data) {
 					goto exit_loop;
 				} else if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_SEEK) {
 					LOGI(2, "player_read_stream queue interrupt seek");
+					av_init_packet(pkt);
 					goto seek_loop;
 				} else {
 					assert(FALSE);
@@ -819,8 +822,10 @@ void * player_read_stream(void *data) {
 			for (;;) {
 				if (player->stop)
 					goto exit_loop;
-				if (player->seek_position != DO_NOT_SEEK)
+				if (player->seek_position != DO_NOT_SEEK) {
+					av_init_packet(pkt);
 					goto seek_loop;
+				}
 				pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 			}
 			pthread_mutex_unlock(&player->mutex_queue);
@@ -995,11 +1000,8 @@ void player_free_video_rgb_frame(State *state, VideoRGBFrameElem *elem) {
 
 	LOGI(7, "player_free_video_rgb_frame deleting global ref");
 	(*env)->DeleteGlobalRef(env, elem->jbitmap);
-	LOGI(7, "player_free_video_rgb_frame freeing video frame");
 	av_free(elem->frame);
-	LOGI(7, "player_free_video_rgb_frame freeing elem");
 	free(elem);
-	LOGI(7, "player_free_video_rgb_frame fried");
 }
 
 void *player_fill_video_rgb_frame(DecoderState *decoder_state) {
@@ -1472,10 +1474,15 @@ void player_stop(State * state) {
 	Player *player = state->player;
 
 	LOGI(3, "player_stop try to stop...");
-	pthread_mutex_lock(&state->player->mutex_operation);
-
 	if (!player->playing)
 		return;
+
+	pthread_mutex_lock(&state->player->mutex_operation);
+
+	if (!player->playing) {
+		pthread_mutex_unlock(&player->mutex_operation);
+		return;
+	}
 	player->playing = FALSE;
 
 	LOGI(3, "player_stop stopping...");
@@ -2131,7 +2138,7 @@ test:
 			LOGI(9, "jni_player_render_frame timeout");
 			break;
 		}
-		LOGI(9, "jni_player_render_frame cond occure");
+		LOGI(9, "jni_player_render_frame condition occurs");
 	}
 	player_update_time(&state, elem->time);
 	update_video_pts(player,elem->time);
@@ -2142,7 +2149,7 @@ test:
 #ifdef MEASURE_TIME
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time_stop);
 	time_diff = timespec_diff(time_start, time_stop);
-	LOGI(7, "waiting for write timediff: %d.%9ld",time_diff.tv_sec, time_diff.tv_nsec);
+	LOGI(7, "waiting for write time diff: %d.%9ld",time_diff.tv_sec, time_diff.tv_nsec);
 #endif
 
 #ifdef MEASURE_TIME
@@ -2150,14 +2157,14 @@ test:
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &render_frame_start);
 	time_diff = timespec_diff(render_frame_stop, render_frame_start);
 	// First time will print undefined value
-	LOGI(7, "rendering timediff: %d.%9ld",time_diff.tv_sec, time_diff.tv_nsec);
+	LOGI(7, "rendering time diff: %d.%9ld",time_diff.tv_sec, time_diff.tv_nsec);
 	time_diff = timespec_diff(prev_start, render_frame_start);
 	if (time_diff.tv_sec > 0 || time_diff.tv_nsec > 1000 * 1000 * 250) {
-		LOGE(7, "single frame timediff: %d.%9ld",time_diff.tv_sec, time_diff.tv_nsec);
+		LOGE(7, "single frame time diff: %d.%9ld",time_diff.tv_sec, time_diff.tv_nsec);
 	} else if (time_diff.tv_nsec > 1000 * 1000 * 40) {
-		LOGW(7, "single frame timediff: %d.%9ld",time_diff.tv_sec, time_diff.tv_nsec);
+		LOGW(7, "single frame time diff: %d.%9ld",time_diff.tv_sec, time_diff.tv_nsec);
 	} else {
-		LOGI(7, "single frame timediff: %d.%9ld",time_diff.tv_sec, time_diff.tv_nsec);
+		LOGI(7, "single frame time diff: %d.%9ld",time_diff.tv_sec, time_diff.tv_nsec);
 	}
 #endif
 	return elem->jbitmap;
