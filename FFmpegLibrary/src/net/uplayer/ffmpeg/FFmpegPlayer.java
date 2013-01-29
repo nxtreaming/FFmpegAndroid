@@ -230,8 +230,12 @@ public class FFmpegPlayer {
 
 	@Override
 	protected void finalize() throws Throwable {
-		deallocNative();
+//		deallocNative(); 
 		super.finalize();
+	}
+
+	public void dealloc(){
+		deallocNative();
 	}
 
 	private native int initNative();
