@@ -1577,6 +1577,12 @@ int player_set_data_source(State *state, const char *file_path,
 	player->pause = TRUE;
 	player->audio_pause_time = player->audio_resume_time = av_gettime();
 	memset(player->stream_indexs, -1, sizeof(player->stream_indexs));
+	memset(player->input_codec_ctxs, 0, sizeof(player->input_codec_ctxs));
+	memset(player->input_frames, 0, sizeof(player->input_frames));
+	memset(player->packets_queue, 0, sizeof(player->packets_queue));
+	memset(player->decode_threads, 0, sizeof(player->decode_threads));
+	memset(player->decode_threads_created, 0, sizeof(player->decode_threads_created));
+
 	player->stream_indexs[AVMEDIA_TYPE_VIDEO   ] = video_index;
 	player->stream_indexs[AVMEDIA_TYPE_AUDIO   ] = audio_index;
 	player->stream_indexs[AVMEDIA_TYPE_SUBTITLE] = subtitle_index;
