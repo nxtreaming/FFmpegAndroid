@@ -83,7 +83,7 @@ public class FFmpegSurfaceView extends SurfaceView implements FFmpegDisplay,
 
 	class TutorialThread extends Thread {
 		private SurfaceHolder mSurfaceHolder;
-		private boolean mRun = false;
+		private volatile boolean mRun = false;
 		private int mSurfaceWidth;
 		private int mSurfaceHeight;
 
@@ -111,7 +111,9 @@ public class FFmpegSurfaceView extends SurfaceView implements FFmpegDisplay,
 					synchronized (mMpegPlayerLock) {
 						while (mMpegPlayerLock == null)
 							mMpegPlayerLock.wait();
-						renderFrame(mMpegPlayer);
+						if (isRunning()) {
+							renderFrame(mMpegPlayer);
+						}
 					}
 				} catch (InterruptedException e) {
 				}
@@ -120,8 +122,9 @@ public class FFmpegSurfaceView extends SurfaceView implements FFmpegDisplay,
 
 		private void renderFrame(FFmpegPlayer mpegPlayer) throws InterruptedException {
 			RenderedFrame renderFrame = mpegPlayer.renderFrame();
+			//if render is interrupted by user, it will return |null|, we just ignor it
 			if (renderFrame == null)
-				throw new RuntimeException();
+				return; //throw new RuntimeException();
 			if (renderFrame.bitmap == null)
 				throw new RuntimeException();
 			try {
@@ -186,8 +189,8 @@ public class FFmpegSurfaceView extends SurfaceView implements FFmpegDisplay,
 	@Override
 	public void surfaceDestroyed(SurfaceHolder holder) {
 		if (mThread != null) {
-			mThread.setRunning(false);
 			this.mMpegPlayer.renderFrameStop();
+			mThread.setRunning(false);
 			mThread.interrupt();
 		}
 	}
