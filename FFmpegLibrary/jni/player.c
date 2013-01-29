@@ -1331,6 +1331,7 @@ int player_create_decoding_threads(Player *player) {
 	int ret;
 	int i;
 	int err = 0;
+
 	ret = pthread_attr_init(&attr);
 	if (ret) {
 		err = -ERROR_COULD_NOT_INIT_PTHREAD_ATTR;
@@ -1393,22 +1394,6 @@ int player_free_decoding_threads(Player *player) {
 		}
 	}
 	return err;
-}
-
-void player_free_context(Player *player) {
-	if (player->format_ctx != NULL) {
-		LOGI(7, "player_set_data_source remove_context");
-		av_freep(&player->format_ctx);
-	}
-}
-
-int player_create_context(Player *player) {
-	player->format_ctx = avformat_alloc_context();
-	if (player->format_ctx == NULL) {
-		LOGE(1, "Could not create AVContext\n");
-		return -ERROR_COULD_NOT_CREATE_AVCONTEXT;
-	}
-	return 0;
 }
 
 void player_free_input(Player *player) {
@@ -1483,14 +1468,17 @@ void player_play_prepare(Player *player) {
 	pthread_mutex_unlock(&player->mutex_queue);
 }
 
-void player_stop_impl(State * state) {
+void player_stop(State * state) {
 	Player *player = state->player;
+
+	LOGI(3, "player_stop try to stop...");
+	pthread_mutex_lock(&state->player->mutex_operation);
 
 	if (!player->playing)
 		return;
 	player->playing = FALSE;
 
-	LOGI(3, "player_stop_impl stopping...");
+	LOGI(3, "player_stop stopping...");
 	player_signal_stop(player);
 	player_free_decoding_threads(player);
 	player_free_audio_track(player, state);
@@ -1500,15 +1488,9 @@ void player_stop_impl(State * state) {
 	player_free_frames(player);
 	player_free_streams(player);
 	player_free_input(player);
-	player_free_context(player);
-	LOGI(3, "player_stop_impl stopped...");
-}
+	LOGI(3, "player_stop stopped...");
 
-void player_stop(State * state) {
-	LOGI(3, "player_stop stopping...");
-	pthread_mutex_lock(&state->player->mutex_operation);
-	player_stop_impl(state);
-	pthread_mutex_unlock(&state->player->mutex_operation);
+	pthread_mutex_unlock(&player->mutex_operation);
 }
 
 static int stream_component_open(Player *player, int stream_index) {
@@ -1579,8 +1561,10 @@ int player_set_data_source(State *state, const char *file_path,
 
 	pthread_mutex_lock(&player->mutex_operation);
 
-	if (player->playing)
-		goto end;
+	if (player->playing) {
+	    pthread_mutex_unlock(&player->mutex_operation);
+	    return ERROR_NOT_STOP_LAST_INSTANCE
+	}
 
 	player->out_format = AV_PIX_FMT_RGB565;
 	player->pause = TRUE;
@@ -1590,9 +1574,6 @@ int player_set_data_source(State *state, const char *file_path,
 	player->stream_indexs[AVMEDIA_TYPE_AUDIO   ] = audio_index;
 	player->stream_indexs[AVMEDIA_TYPE_SUBTITLE] = subtitle_index;
 	memset(st_index, -1, sizeof(st_index));
-
-	if ((err = player_create_context(player)) < 0)
-		goto error;
 
 	if ((err = player_open_input(player, file_path, dictionary)) < 0)
 		goto error;
@@ -1646,7 +1627,8 @@ int player_set_data_source(State *state, const char *file_path,
 
 	player->playing = TRUE;
 	LOGI(3, "player_set_data_source success");
-	goto end;
+	pthread_mutex_unlock(&player->mutex_operation);
+	return err;
 
 error:
 	LOGI(3, "player_set_data_source error");
@@ -1660,9 +1642,6 @@ error:
 	player_free_frames(player);
 	player_free_streams(player);
 	player_free_input(player);
-	player_free_context(player);
-end:
-	LOGI(7, "player_set_data_source end");
 	pthread_mutex_unlock(&player->mutex_operation);
 	return err;
 }
