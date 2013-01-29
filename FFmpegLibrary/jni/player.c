@@ -1331,6 +1331,7 @@ int player_create_decoding_threads(Player *player) {
 	int ret;
 	int i;
 	int err = 0;
+
 	ret = pthread_attr_init(&attr);
 	if (ret) {
 		err = -ERROR_COULD_NOT_INIT_PTHREAD_ATTR;
@@ -1560,8 +1561,10 @@ int player_set_data_source(State *state, const char *file_path,
 
 	pthread_mutex_lock(&player->mutex_operation);
 
-	if (player->playing)
-		goto end;
+	if (player->playing) {
+	    pthread_mutex_unlock(&player->mutex_operation);
+	    return ERROR_NOT_STOP_LAST_INSTANCE
+	}
 
 	player->out_format = AV_PIX_FMT_RGB565;
 	player->pause = TRUE;
@@ -1624,7 +1627,8 @@ int player_set_data_source(State *state, const char *file_path,
 
 	player->playing = TRUE;
 	LOGI(3, "player_set_data_source success");
-	goto end;
+	pthread_mutex_unlock(&player->mutex_operation);
+	return err;
 
 error:
 	LOGI(3, "player_set_data_source error");
@@ -1638,8 +1642,6 @@ error:
 	player_free_frames(player);
 	player_free_streams(player);
 	player_free_input(player);
-end:
-	LOGI(7, "player_set_data_source end");
 	pthread_mutex_unlock(&player->mutex_operation);
 	return err;
 }
