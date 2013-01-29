@@ -1261,7 +1261,7 @@ int player_create_decoding_threads(Player *player) {
 	}
 	for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
 		if (player->input_codec_ctxs[i]) {
-			DecoderData *decoder_data = malloc(sizeof(decoder_data));
+			DecoderData *decoder_data = malloc(sizeof(DecoderData));
 			*decoder_data = (DecoderData) {player, (enum AVMediaType)i};
 			ret = pthread_create(&player->decode_threads[i], &attr, player_decode,
 				decoder_data);
@@ -1755,7 +1755,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 
 	LOGI(1, "jni_player_init");
 	Player *player = malloc(sizeof(Player));
-	memset(player, 0, sizeof(player));
+	memset(player, 0, sizeof(Player));
 	player->audio_index = -1;
 	player->video_index = -1;
 	player->rendering = FALSE;
