@@ -727,6 +727,7 @@ void * player_read_stream(void *data) {
 			if (packet_data == NULL) {
 				if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_STOP) {
 					LOGI(2, "player_read_stream queue interrupt stop");
+					av_init_packet(pkt);
 					goto exit_loop;
 				} else if (interrupt_ret == READ_FROM_STREAM_CHECK_MSG_SEEK) {
 					LOGI(2, "player_read_stream queue interrupt seek");
@@ -740,8 +741,10 @@ void * player_read_stream(void *data) {
 			LOGI(3, "player_read_stream sending end_of_stream packet");
 			queue_push_finish_impl(queue, &player->mutex_queue, &player->cond_queue, to_write);
 			for (;;) {
-				if (player->stop)
+				if (player->stop) {
+					av_init_packet(pkt);
 					goto exit_loop;
+				}
 				if (player->seek_position != DO_NOT_SEEK) {
 					av_init_packet(pkt);
 					goto seek_loop;
@@ -1397,7 +1400,7 @@ void player_stop(State * state) {
 	if (!player->playing)
 		return;
 
-	pthread_mutex_lock(&state->player->mutex_operation);
+	pthread_mutex_lock(&player->mutex_operation);
 
 	if (!player->playing) {
 		pthread_mutex_unlock(&player->mutex_operation);
