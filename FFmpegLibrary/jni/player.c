@@ -417,7 +417,7 @@ int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketData *pa
 	}
 
 	LOGI(10, "player_decode_video decoding");
-	int frameFinished;
+	int frameFinished = 0;
 	int ret = avcodec_decode_video2(ctx, frame, &frameFinished, packet_data->packet);
 	if (ret < 0) {
 		LOGE(1, "player_decode_video Fail decoding video %d\n", ret);
@@ -529,10 +529,11 @@ void *player_decode(void * data) {
 	}
 
 	for (;;) {
-		LOGI(10, "player_decode[%d] waiting for frame", decoder_data->stream_type);
 		int interrupt_ret;
 		PacketData *packet_data;
 		int has_sleep;
+
+		LOGI(10, "player_decode[%d] waiting for frame", decoder_data->stream_type);
 		pthread_mutex_lock(&player->mutex_queue);
 pop:
 		has_sleep = 0;
@@ -1087,16 +1088,6 @@ void player_free_queues(State *state) {
 	}
 }
 
-void player_free_rgb_frames(State *state) {
-	Player *player = state->player;
-	if (player->rgb_video_queue != NULL) {
-		LOGI(7, "player_set_data_source free_video_frames_queue");
-		queue_free(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue, state);
-		player->rgb_video_queue = NULL;
-		LOGI(7, "player_set_data_source fried_video_frames_queue");
-	}
-}
-
 int player_prepare_rgb_frames(DecoderState *decoder_state, State *state) {
 	Player *player = decoder_state->player;
 
@@ -1139,7 +1130,6 @@ void player_free_audio_track(Player *player, State *state) {
 		swr_free(&player->swr_context);
 		player->swr_context = NULL;
 	}
-
 	if (player->audio_track != NULL) {
 		LOGI(7, "player_set_data_source free_audio_track_ref");
 		(*state->env)->DeleteGlobalRef(state->env, player->audio_track);
@@ -1413,7 +1403,6 @@ void player_stop(State * state) {
 	player_free_decoding_threads(player);
 	player_free_audio_track(player, state);
 	player_free_sws_context(player);
-	player_free_rgb_frames(state);
 	player_free_queues(state);
 	player_free_frames(player);
 	player_free_streams(player);
@@ -1568,7 +1557,6 @@ error:
 	player_free_decoding_threads(player);
 	player_free_audio_track(player, state);
 	player_free_sws_context(player);
-	player_free_rgb_frames(state);
 	player_free_queues(state);
 	player_free_frames(player);
 	player_free_streams(player);
@@ -1741,7 +1729,23 @@ void jni_player_dealloc(JNIEnv *env, jobject thiz) {
 	Player *player = player_get_player_field(env, thiz);
 
 	(*env)->DeleteGlobalRef(env, player->audio_track_class);
+	pthread_mutex_lock(&player->mutex_operation);
+	// MUST wait for render stop
+	while (player->rendering) {
+		LOGI(1, "jni_player_dealloc: waiting render stop...");
+		usleep(10);
+	}
+	State state = { player, env, thiz };
+	if (player->rgb_video_queue != NULL) {
+		LOGI(7, "player_set_data_source free_video_frames_queue");
+		queue_free(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue, &state);
+		player->rgb_video_queue = NULL;
+		LOGI(7, "player_set_data_source fried_video_frames_queue");
+	}
+	pthread_mutex_unlock(&player->mutex_operation);
+	LOGI(1, "jni_player_dealloc: render stopped...");
 	free(player);
+	LOGI(1, "jni_player_dealloc: bye bye");
 }
 
 int jni_player_init(JNIEnv *env, jobject thiz) {
@@ -1930,6 +1934,7 @@ void jni_player_render_frame_start(JNIEnv *env, jobject thiz) {
 	pthread_mutex_lock(&player->mutex_queue);
 	assert(!player->rendering);
 	player->rendering = TRUE;
+	LOGI(7, "jni_player_render_frame_start")
 	player->interrupt_renderer = FALSE;
 	pthread_cond_broadcast(&player->cond_queue);
 	pthread_mutex_unlock(&player->mutex_queue);
@@ -1940,6 +1945,7 @@ void jni_player_render_frame_stop(JNIEnv *env, jobject thiz) {
 	pthread_mutex_lock(&player->mutex_queue);
 	assert(player->rendering);
 	player->rendering = FALSE;
+	LOGI(7, "jni_player_render_frame_stop")
 	player->interrupt_renderer = TRUE;
 	pthread_cond_broadcast(&player->cond_queue);
 	pthread_mutex_unlock(&player->mutex_queue);
@@ -1951,8 +1957,21 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 	int interrupt_ret;
 	VideoRGBFrameElem *elem;
 
+	if (!player->rendering) {
+		LOGI(1, "jni_player_render_frame should be skipped...");
+		throw_interrupted_exception(env, "Render frame was interrupted by user");
+		return NULL;
+	}
+
 	LOGI(7, "jni_player_render_frame render wait...");
 	pthread_mutex_lock(&player->mutex_queue);
+
+	if(!player->rgb_video_queue) {
+		LOGI(1, "jni_player_render_frame: rgb_video_queue freed ...");
+		pthread_mutex_unlock(&player->mutex_queue);
+		throw_interrupted_exception(env, "Render frame was interrupted by user");
+		return NULL;
+	}
 
 pop:
 	LOGI(4, "jni_player_render_frame reading from queue");
