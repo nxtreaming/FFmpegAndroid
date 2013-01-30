@@ -144,7 +144,6 @@ test:
 		if (next_next_to_write != queue->next_to_read) {
 			break;
 		}
-		LOGW(3,"queue is full, waiting...");
 wait:
 		pthread_cond_wait(cond, mutex);
 	}

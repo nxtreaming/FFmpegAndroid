@@ -57,7 +57,7 @@
 
 #include "player_static.h"
 
-#define LOG_LEVEL 10
+#define LOG_LEVEL 5
 #define LOG_TAG "AVEngine:player.c"
 #define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
 #define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
@@ -267,8 +267,6 @@ int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
 		goto end;
 	}
 
-	pthread_mutex_lock(&player->mutex_queue);
-
 	if (pts != AV_NOPTS_VALUE) {
 		player->audio_clock = av_q2d(stream->time_base) * pts;
 	} else {
@@ -277,8 +275,6 @@ int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
 						* av_get_bytes_per_sample(ctx->sample_fmt));
 	}
 	player->audio_write_time = av_gettime();
-	pthread_cond_broadcast(&player->cond_queue);
-	pthread_mutex_unlock(&player->mutex_queue);
 
 	LOGI(10, "player_write_audio Writing sample data")
 
@@ -1923,9 +1919,8 @@ QueueCheckFuncRet player_render_frame_check(Queue *queue, Player *player, int *c
 		return QUEUE_CHECK_FUNC_RET_WAIT;
 	}
 	if (player->stop) {
-		*check_ret_data = RENDER_CHECK_MSG_INTERRUPT;
 		LOGI(6, "player_render_frame_check: stop")
-		return QUEUE_CHECK_FUNC_RET_SKIP;
+		return QUEUE_CHECK_FUNC_RET_WAIT;
 	}
 
 	LOGI(9, "player_render_frame_check: test")
@@ -1962,6 +1957,8 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 
 	if (!player->rendering) {
 		LOGI(1, "jni_player_render_frame should be skipped...");
+		// do not throw exception frequently
+		usleep(10000);
 		throw_interrupted_exception(env, "Render frame was interrupted by user");
 		return NULL;
 	}
@@ -1971,6 +1968,7 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 
 	if(!player->rgb_video_queue) {
 		LOGI(1, "jni_player_render_frame: rgb_video_queue freed ...");
+		usleep(10000);
 		pthread_mutex_unlock(&player->mutex_queue);
 		throw_interrupted_exception(env, "Render frame was interrupted by user");
 		return NULL;
@@ -2009,6 +2007,7 @@ test:
 				queue_pop_finish_impl(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
 				break;
 			case QUEUE_CHECK_FUNC_RET_TEST:
+				usleep(100);
 				break;
 			default:
 				assert(FALSE);
@@ -2019,6 +2018,7 @@ test:
 			if (interrupt_ret == RENDER_CHECK_MSG_INTERRUPT) {
 				LOGI(2, "jni_player_render_frame interrupted");
 				pthread_mutex_unlock(&player->mutex_queue);
+				usleep(10000);
 				throw_interrupted_exception(env, "Render frame was interrupted by user");
 				return NULL;
 			} else if (interrupt_ret == RENDER_CHECK_MSG_FLUSH) {
