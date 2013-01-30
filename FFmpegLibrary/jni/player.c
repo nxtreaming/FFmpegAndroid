@@ -82,6 +82,7 @@ typedef struct Player {
 	jmethodID audio_track_pause;
 	jmethodID audio_track_flush;
 	jmethodID audio_track_stop;
+	jmethodID audio_track_release;
 	jmethodID audio_track_getChannelCount;
 	jmethodID audio_track_getSampleRate;
 
@@ -593,7 +594,13 @@ flush:
 		LOGI(2, "player_decode[%d] flushing", decoder_data->stream_type);
 
 		if (codec_type == AVMEDIA_TYPE_AUDIO) {
-			(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
+			if (stop) {
+				LOGI(1,"player_decoder[%d], try to stop and release audio_track", decoder_data->stream_type);
+				(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_stop);
+				(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_release);
+			} else {
+				(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
+			}
 		} else if (codec_type == AVMEDIA_TYPE_VIDEO) {
 			if (!player->rendering) {
 				LOGI(2, "player_decode_video not rendering flushing rgb_video_queue");
@@ -1857,6 +1864,12 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 	player->audio_track_stop = java_get_method(env, player->audio_track_class, audio_track_stop);
 	if (player->audio_track_stop == NULL) {
 		err = ERROR_NOT_FOUND_STOP_METHOD;
+		goto delete_audio_track_global_ref;
+	}
+
+	player->audio_track_release = java_get_method(env, player->audio_track_class, audio_track_release);
+	if (player->audio_track_release == NULL) {
+		err = ERROR_NOT_FOUND_RELEASE_METHOD;
 		goto delete_audio_track_global_ref;
 	}
 
