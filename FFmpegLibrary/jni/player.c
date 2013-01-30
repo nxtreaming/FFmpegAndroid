@@ -823,9 +823,13 @@ exit_loop:
 		goto detach_current_thread;
 
 seek_loop:
-		seek_stream_index = player->stream_indexs[AVMEDIA_TYPE_VIDEO];
-		seek_stream = player->input_streams[AVMEDIA_TYPE_VIDEO];
-
+		if (player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO]) {
+			seek_stream_index = player->stream_indexs[AVMEDIA_TYPE_VIDEO];
+			seek_stream = player->input_streams[AVMEDIA_TYPE_VIDEO];
+		} else {
+			seek_stream_index = player->stream_indexs[AVMEDIA_TYPE_AUDIO];
+			seek_stream = player->input_streams[AVMEDIA_TYPE_AUDIO];
+		}
 		// getting seek target time in time_base value
 		seek_target = av_rescale_q(AV_TIME_BASE * (int64_t) player->seek_position, AV_TIME_BASE_Q,
 			seek_stream->time_base);
@@ -1944,6 +1948,13 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 	int interrupt_ret;
 	VideoRGBFrameElem *elem;
 
+	if (!player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO]) {
+		player_update_time(&state, player->audio_clock);
+		usleep(MIN_SLEEP_TIME_US*10);
+		// MUST throw exception to driver next render
+		throw_interrupted_exception(env, "Render frame was simulated by user");
+		return NULL;
+	}
 	if (!player->rendering) {
 		LOGI(1, "jni_player_render_frame should be skipped...");
 		// do not throw exception frequently
