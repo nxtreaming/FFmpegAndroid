@@ -1337,14 +1337,6 @@ static int player_open_input(Player *player, const char *file_path, AVDictionary
 	return ERROR_NO_ERROR;
 }
 
-static int player_find_stream_info(Player *player) {
-	if (avformat_find_stream_info(player->format_ctx, NULL) < 0) {
-		LOGE(1, "Could not open stream\n");
-		return -ERROR_COULD_NOT_OPEN_STREAM;
-	}
-	return ERROR_NO_ERROR;
-}
-
 static void player_signal_stop(Player *player) {
 	pthread_mutex_lock(&player->mutex_queue);
 	player->stop = TRUE;
@@ -1479,8 +1471,12 @@ static int player_set_data_source(State *state, const char *file_path,
 	if ((err = player_open_input(player, file_path, dictionary)) < 0)
 		goto error;
 
-	if ((err = player_find_stream_info(player)) < 0)
+	err = avformat_find_stream_info(player->format_ctx, NULL);
+	if (err < 0) {
+		LOGE(1, "Could not open stream\n");
+		err = -ERROR_COULD_NOT_OPEN_STREAM;
 		goto error;
+	}
 
 	ic = player->format_ctx;
 	for (i=0; i<ic->nb_streams; i++) {
