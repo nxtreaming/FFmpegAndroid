@@ -69,6 +69,7 @@
 #define DO_NOT_SEEK (0xdeadbeef)
 
 #define MIN_SLEEP_TIME_MS 2
+#define MIN_SLEEP_TIME_US 10000
 #define EXTERNAL_CLOCK_SPEED_STEP 0.001
 
 //#define MEASURE_TIME
@@ -705,7 +706,7 @@ void * player_read_stream(void *data) {
 	av_init_packet(pkt);
 	for (;;) {
 		while (player->pause && !player->stop) {
-			usleep(10000);
+			usleep(MIN_SLEEP_TIME_US);
 			// MUST wake up from PAUSE --> SEEK/STOP
 			if (player->seek_position != DO_NOT_SEEK) {
 				av_init_packet(pkt);
@@ -1958,7 +1959,7 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 	if (!player->rendering) {
 		LOGI(1, "jni_player_render_frame should be skipped...");
 		// do not throw exception frequently
-		usleep(10000);
+		usleep(MIN_SLEEP_TIME_US);
 		throw_interrupted_exception(env, "Render frame was interrupted by user");
 		return NULL;
 	}
@@ -1968,7 +1969,7 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 
 	if(!player->rgb_video_queue) {
 		LOGI(1, "jni_player_render_frame: rgb_video_queue freed ...");
-		usleep(10000);
+		usleep(MIN_SLEEP_TIME_US);
 		pthread_mutex_unlock(&player->mutex_queue);
 		throw_interrupted_exception(env, "Render frame was interrupted by user");
 		return NULL;
@@ -2018,7 +2019,7 @@ test:
 			if (interrupt_ret == RENDER_CHECK_MSG_INTERRUPT) {
 				LOGI(2, "jni_player_render_frame interrupted");
 				pthread_mutex_unlock(&player->mutex_queue);
-				usleep(10000);
+				usleep(MIN_SLEEP_TIME_US);
 				throw_interrupted_exception(env, "Render frame was interrupted by user");
 				return NULL;
 			} else if (interrupt_ret == RENDER_CHECK_MSG_FLUSH) {
