@@ -4,9 +4,6 @@
 // InterruptedException
 static char *interrupted_exception_class_path = "java/lang/InterruptedException";
 
-// RuntimeException
-static char *runtime_exception_class_path = "java/lang/RuntimeException";
-
 // NotPlayingException
 static char *not_playing_exception_class_path = "net/uplayer/ffmpeg/NotPlayingException";
 
