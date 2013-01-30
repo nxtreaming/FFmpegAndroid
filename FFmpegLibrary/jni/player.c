@@ -1575,6 +1575,10 @@ void jni_player_seek(JNIEnv *env, jobject thiz, jint position) {
 				"Could not pause while not playing");
 		goto end;
 	}
+	if (player->seek_position != DO_NOT_SEEK) {
+		LOGI(1, "jni_player_seek still in last seek, ignore current seeking");
+		goto end;
+	}
 	pthread_mutex_lock(&player->mutex_queue);
 	player->seek_position = position;
 	pthread_cond_broadcast(&player->cond_queue);
