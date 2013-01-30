@@ -122,7 +122,7 @@ public class FFmpegSurfaceView extends SurfaceView implements FFmpegDisplay,
 
 		private void renderFrame(FFmpegPlayer mpegPlayer) throws InterruptedException {
 			RenderedFrame renderFrame = mpegPlayer.renderFrame();
-			//if render is interrupted by user, it will return |null|, we just ignor it
+			//if render is interrupted by user, it will return |null|, we just ignore it
 			if (renderFrame == null)
 				return; //throw new RuntimeException();
 			if (renderFrame.bitmap == null)
