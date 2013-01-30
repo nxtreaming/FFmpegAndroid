@@ -900,7 +900,7 @@ static void player_free_packet(State *player, PacketData *elem) {
 static void player_free_video_rgb_frame(State *state, VideoRGBFrameElem *elem) {
 	JNIEnv *env = state->env;
 	(*env)->DeleteGlobalRef(env, elem->jbitmap);
-	av_free(elem->frame);
+	avcodec_free_frame(&elem->frame);
 	free(elem);
 }
 
