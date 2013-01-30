@@ -57,7 +57,7 @@
 
 #include "player_static.h"
 
-#define LOG_LEVEL 5
+#define LOG_LEVEL 3
 #define LOG_TAG "AVEngine:player.c"
 #define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
 #define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
@@ -71,8 +71,6 @@
 #define MIN_SLEEP_TIME_MS 2
 #define MIN_SLEEP_TIME_US 10000
 #define EXTERNAL_CLOCK_SPEED_STEP 0.001
-
-//#define MEASURE_TIME
 
 typedef struct Player {
 	JavaVM *get_javavm;
@@ -1086,7 +1084,7 @@ void player_free_queues(State *state) {
 int player_prepare_rgb_frames(DecoderState *decoder_state, State *state) {
 	Player *player = decoder_state->player;
 
-	player->rgb_video_queue = queue_init_with_custom_lock(8,
+	player->rgb_video_queue = queue_init_with_custom_lock(6,
 		(queue_fill_func) player_fill_video_rgb_frame,
 		(queue_free_func) player_free_video_rgb_frame, decoder_state,
 		state, &player->mutex_queue, &player->cond_queue);
