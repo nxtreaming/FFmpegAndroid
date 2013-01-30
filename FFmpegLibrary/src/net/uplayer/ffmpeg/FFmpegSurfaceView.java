@@ -199,8 +199,8 @@ public class FFmpegSurfaceView extends SurfaceView implements FFmpegDisplay,
 	@Override
 	public void surfaceDestroyed(SurfaceHolder holder) {
 		if (mThread != null) {
-			this.mMpegPlayer.renderFrameStop();
 			mThread.setRunning(false);
+			this.mMpegPlayer.renderFrameStop();
 			mThread.interrupt();
 		}
 	}
