@@ -1568,7 +1568,7 @@ void jni_player_seek(JNIEnv *env, jobject thiz, jint position) {
 	if (!player->playing) {
 		LOGI(1, "jni_player_seek could not seek while not playing");
 		throw_exception(env, not_playing_exception_class_path,
-				"Could not pause while not playing");
+				"Could not seek while not playing");
 		goto end;
 	}
 	if (player->seek_position != DO_NOT_SEEK) {
