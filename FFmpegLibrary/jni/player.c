@@ -885,20 +885,15 @@ Player * player_get_player_field(JNIEnv *env, jobject thiz) {
 }
 
 static void * player_fill_packet(State *state) {
-	PacketData *packet_data = malloc(sizeof(PacketData));
+	PacketData *packet_data = malloc(sizeof(PacketData) + sizeof(AVPacket));
 	if (packet_data == NULL) {
 		return NULL;
 	}
-	packet_data->packet = malloc(sizeof(AVPacket));
-	if (packet_data->packet == NULL) {
-		free(packet_data);
-		return NULL;
-	}
+	packet_data->packet = (AVPacket*)(packet_data + 1);
 	return packet_data;
 }
 
 static void player_free_packet(State *player, PacketData *elem) {
-	free(elem->packet);
 	free(elem);
 }
 
