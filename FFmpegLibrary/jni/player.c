@@ -57,7 +57,7 @@
 
 #include "player_static.h"
 
-#define LOG_LEVEL 1
+#define LOG_LEVEL 10
 #define LOG_TAG "AVEngine:player.c"
 #define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
 #define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
@@ -1916,13 +1916,12 @@ QueueCheckFuncRet player_render_frame_check(Queue *queue, Player *player, int *c
 	}
 	if (player->pause) {
 		LOGI(6, "player_render_frame_check: pause")
-
 		return QUEUE_CHECK_FUNC_RET_WAIT;
 	}
 	if (player->stop) {
+		*check_ret_data = RENDER_CHECK_MSG_INTERRUPT;
 		LOGI(6, "player_render_frame_check: stop")
-
-		return QUEUE_CHECK_FUNC_RET_WAIT;
+		return QUEUE_CHECK_FUNC_RET_SKIP;
 	}
 
 	LOGI(9, "player_render_frame_check: test")
