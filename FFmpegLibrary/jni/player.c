@@ -918,8 +918,6 @@ void player_free_packet(State *player, PacketData *elem) {
 
 void player_free_video_rgb_frame(State *state, VideoRGBFrameElem *elem) {
 	JNIEnv *env = state->env;
-
-	LOGI(7, "player_free_video_rgb_frame deleting global ref");
 	(*env)->DeleteGlobalRef(env, elem->jbitmap);
 	av_free(elem->frame);
 	free(elem);
@@ -1976,7 +1974,7 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 	}
 
 pop:
-	LOGI(4, "jni_player_render_frame reading from queue");
+	LOGI(7, "jni_player_render_frame reading from queue");
 	elem = queue_pop_start_impl(&player->rgb_video_queue,
 			&player->mutex_queue, &player->cond_queue,
 			(QueueCheckFunc) player_render_frame_check, player,
@@ -1999,12 +1997,12 @@ test:
 					player, &interrupt_ret);
 			switch (ret) {
 			case QUEUE_CHECK_FUNC_RET_WAIT:
-				LOGI(1, "jni_player_render_frame queue wait");
+				LOGI(3, "jni_player_render_frame queue wait");
 				pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 				goto test;
 			case QUEUE_CHECK_FUNC_RET_SKIP:
 				skip = TRUE;
-				LOGI(1, "jni_player_render_frame queue skip");
+				LOGI(3, "jni_player_render_frame queue skip");
 				queue_pop_finish_impl(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
 				break;
 			case QUEUE_CHECK_FUNC_RET_TEST:
