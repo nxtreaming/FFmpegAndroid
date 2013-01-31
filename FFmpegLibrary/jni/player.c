@@ -86,9 +86,9 @@ typedef struct Player {
 	jmethodID audio_track_getChannelCount;
 	jmethodID audio_track_getSampleRate;
 
-	jmethodID player_prepareFrame;
-	jmethodID player_onUpdateTime;
-	jmethodID player_prepareAudioTrack;
+	jmethodID prepareFrame;
+	jmethodID onUpdateTime;
+	jmethodID prepareAudioTrack;
 
 	pthread_mutex_t mutex_operation;
 
@@ -939,7 +939,7 @@ static void *player_fill_video_rgb_frame(DecoderState *decoder_state) {
 
 	LOGI(10, "player_fill_video_rgb_frame prepareFrame(%d, %d)", destWidth, destHeight);
 	jobject jbitmap = (*env)->CallObjectMethod(env, thiz,
-			player->player_prepareFrame, destWidth, destHeight);
+			player->prepareFrame, destWidth, destHeight);
 
 	jthrowable exc = (*env)->ExceptionOccurred(env);
 	if (exc) {
@@ -979,7 +979,7 @@ static void player_update_current_time(State *state, int is_finished) {
 	jboolean jis_finished = is_finished ? JNI_TRUE : JNI_FALSE;
 
 	(*state->env)->CallVoidMethod(state->env, state->thiz,
-		player->player_onUpdateTime, player->last_updated_time,
+		player->onUpdateTime, player->last_updated_time,
 		player->video_duration, jis_finished);
 }
 
@@ -1139,7 +1139,7 @@ static int player_create_audio_track(Player *player, State *state) {
 	int channels = ctx->channels;
 
 	jobject audio_track = (*env)->CallObjectMethod(env,
-		state->thiz, player->player_prepareAudioTrack, sample_rate, channels);
+		state->thiz, player->prepareAudioTrack, sample_rate, channels);
 
 	jthrowable exc = (*env)->ExceptionOccurred(env);
 	if (exc) {
@@ -1799,23 +1799,23 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 		(*env)->SetIntField(env, thiz, player_m_native_player_field,
 				(jint)player);
 
-		player->player_prepareFrame = java_get_method(env, player_class,
+		player->prepareFrame = java_get_method(env, player_class,
 				player_prepareFrame);
-		if (player->player_prepareFrame == NULL) {
+		if (player->prepareFrame == NULL) {
 			err = ERROR_NOT_FOUND_PREPARE_FRAME_METHOD;
 			goto free_player;
 		}
 
-		player->player_onUpdateTime = java_get_method(env,
+		player->onUpdateTime = java_get_method(env,
 				player_class, player_onUpdateTime);
-		if (player->player_onUpdateTime == NULL) {
+		if (player->onUpdateTime == NULL) {
 			err = ERROR_NOT_FOUND_ON_UPDATE_TIME_METHOD;
 			goto free_player;
 		}
 
-		player->player_prepareAudioTrack = java_get_method(env,
+		player->prepareAudioTrack = java_get_method(env,
 				player_class, player_prepareAudioTrack);
-		if (player->player_prepareAudioTrack == NULL) {
+		if (player->prepareAudioTrack == NULL) {
 			err = ERROR_NOT_FOUND_PREPARE_AUDIO_TRACK_METHOD;
 			goto free_player;
 		}
