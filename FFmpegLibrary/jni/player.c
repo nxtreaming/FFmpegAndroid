@@ -1950,7 +1950,7 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 
 	if (!player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO]) {
 		player_update_time(&state, player->audio_clock);
-		usleep(MIN_SLEEP_TIME_US*10);
+		usleep(MIN_SLEEP_TIME_US*5);
 		// MUST throw exception to driver next render
 		throw_interrupted_exception(env, "Render frame was simulated by user");
 		return NULL;
