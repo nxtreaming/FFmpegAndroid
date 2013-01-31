@@ -1783,7 +1783,6 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 
 	{
 		jclass player_class = (*env)->FindClass(env, player_class_path);
-
 		if (player_class == NULL) {
 			err = ERROR_NOT_FOUND_PLAYER_CLASS;
 			goto free_player;
@@ -1797,7 +1796,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 		}
 
 		(*env)->SetIntField(env, thiz, player_m_native_player_field,
-				(jint) player);
+				(jint)player);
 
 		player->player_prepareFrame = java_get_method(env, player_class,
 				player_prepareFrame);
@@ -1819,20 +1818,17 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 			err = ERROR_NOT_FOUND_PREPARE_AUDIO_TRACK_METHOD;
 			goto free_player;
 		}
-
 		(*env)->DeleteLocalRef(env, player_class);
 	}
 
 	{
-		jclass audio_track_class = (*env)->FindClass(env,
-				android_track_class_path);
+		jclass audio_track_class = (*env)->FindClass(env, android_track_class_path);
 		if (audio_track_class == NULL) {
 			err = ERROR_NOT_FOUND_AUDIO_TRACK_CLASS;
 			goto free_player;
 		}
 
-		player->audio_track_class = (*env)->NewGlobalRef(env,
-				audio_track_class);
+		player->audio_track_class = (*env)->NewGlobalRef(env, audio_track_class);
 		if (player->audio_track_class == NULL) {
 			err = ERROR_COULD_NOT_CREATE_GLOBAL_REF_FOR_AUDIO_TRACK_CLASS;
 			(*env)->DeleteLocalRef(env, audio_track_class);
@@ -1970,7 +1966,7 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 		LOGI(1, "jni_player_render_frame: rgb_video_queue freed ...");
 		usleep(MIN_SLEEP_TIME_US);
 		pthread_mutex_unlock(&player->mutex_queue);
-		throw_interrupted_exception(env, "Render frame was interrupted by user");
+		throw_interrupted_exception(env, "RGB video queue is NULL");
 		return NULL;
 	}
 
@@ -1978,7 +1974,7 @@ pop:
 	LOGI(7, "jni_player_render_frame reading from queue");
 	elem = queue_pop_start_impl(&player->rgb_video_queue,
 			&player->mutex_queue, &player->cond_queue,
-			(QueueCheckFunc) player_render_frame_check, player,
+			(QueueCheckFunc)player_render_frame_check, player,
 			&interrupt_ret);
 	for (;;) {
 		int skip = FALSE;
@@ -1994,8 +1990,7 @@ pop:
 			}
 			QueueCheckFuncRet ret;
 test:
-			ret = player_render_frame_check(player->rgb_video_queue,
-					player, &interrupt_ret);
+			ret = player_render_frame_check(player->rgb_video_queue, player, &interrupt_ret);
 			switch (ret) {
 			case QUEUE_CHECK_FUNC_RET_WAIT:
 				LOGI(3, "jni_player_render_frame queue wait");
@@ -2024,8 +2019,7 @@ test:
 			} else if (interrupt_ret == RENDER_CHECK_MSG_FLUSH) {
 				LOGI(2, "jni_player_render_frame flush");
 				VideoRGBFrameElem *elem;
-				while ((elem = queue_pop_start_impl_non_block(
-						player->rgb_video_queue)) != NULL) {
+				while ((elem = queue_pop_start_impl_non_block(player->rgb_video_queue)) != NULL) {
 					queue_pop_finish_impl(player->rgb_video_queue, &player->mutex_queue, &player->cond_queue);
 				}
 				LOGI(2, "jni_player_render_frame flushed");
@@ -2040,8 +2034,7 @@ test:
 		int64_t current_time = av_gettime();
 		int64_t time_diff = current_time - player->audio_write_time;
 		double pts_time_diff_d = elem->time - player->audio_clock;
-		int64_t sleep_time = (int64_t) (pts_time_diff_d * 1000.0)
-				- (int64_t) (time_diff / 1000L);
+		int64_t sleep_time = (int64_t) (pts_time_diff_d * 1000.0) - (int64_t) (time_diff / 1000L);
 		LOGI(9,
 				"jni_player_render_frame current_time: "
 				"%lld, write_time: %lld, time_diff: %lld, "
