@@ -1075,7 +1075,7 @@ static void player_free_queues(State *state) {
 static int player_prepare_rgb_frames(DecoderState *decoder_state, State *state) {
 	Player *player = decoder_state->player;
 
-	player->rgb_video_queue = queue_init_with_custom_lock(6,
+	player->rgb_video_queue = queue_init_with_custom_lock(2,
 		(queue_fill_func) player_fill_video_rgb_frame,
 		(queue_free_func) player_free_video_rgb_frame, decoder_state,
 		state, &player->mutex_queue, &player->cond_queue);
