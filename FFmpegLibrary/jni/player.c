@@ -594,12 +594,11 @@ flush:
 		LOGI(2, "player_decode[%d] flushing", decoder_data->stream_type);
 
 		if (codec_type == AVMEDIA_TYPE_AUDIO) {
+			(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
 			if (stop) {
 				LOGI(1,"player_decoder[%d], try to stop and release audio_track", decoder_data->stream_type);
 				(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_stop);
 				(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_release);
-			} else {
-				(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
 			}
 		} else if (codec_type == AVMEDIA_TYPE_VIDEO) {
 			if (!player->rendering) {
