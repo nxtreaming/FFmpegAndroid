@@ -259,15 +259,13 @@ static int player_write_audio(DecoderData *decoder_data, JNIEnv *env,
 		player->audio_clock = av_q2d(stream->time_base) * pts;
 	} else {
 		player->audio_clock += (double) original_data_size
-				/ (ctx->channels * ctx->sample_rate
-						* av_get_bytes_per_sample(ctx->sample_fmt));
+				/ (ctx->channels * ctx->sample_rate * av_get_bytes_per_sample(ctx->sample_fmt));
 	}
 	player->audio_write_time = av_gettime();
 
 	LOGI(10, "player_write_audio Writing sample data")
 
-	jbyte *jni_samples = (*env)->GetByteArrayElements(env, samples_byte_array,
-			NULL);
+	jbyte *jni_samples = (*env)->GetByteArrayElements(env, samples_byte_array, NULL);
 	memcpy(jni_samples, data, data_size);
 	(*env)->ReleaseByteArrayElements(env, samples_byte_array, jni_samples, 0);
 
@@ -309,7 +307,7 @@ static QueueCheckFuncRet player_decode_queue_check(Queue *queue, DecoderData *de
 }
 
 static int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
-	int got_frame_ptr;
+	int got_frame_ptr = 0;
 	Player *player = decoder_data->player;
 	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
 	AVFrame *frame = player->input_frames[AVMEDIA_TYPE_AUDIO];
@@ -356,9 +354,9 @@ static int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketD
 
 	LOGI(10, "player_decode_audio Decoded audio frame\n");
 
-	int err;
-	if ((err = player_write_audio(decoder_data, env, pts, audio_buf, data_size,
-			original_data_size))) {
+	int err = player_write_audio(decoder_data, env, pts, audio_buf, data_size,
+			original_data_size);
+	if (err) {
 		LOGE(1, "Could not write frame");
 		return err;
 	}
@@ -372,7 +370,7 @@ static int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketD
 	AVStream *stream = player->input_streams[AVMEDIA_TYPE_VIDEO];
 	int interrupt_ret;
 	int to_write;
-	VideoRGBFrameElem * elem;
+	VideoRGBFrameElem *elem;
 
 	if (packet_data->end_of_stream) {
 		LOGI(2, "player_decode_video waiting for queue to end of stream");
@@ -499,7 +497,7 @@ static void *player_decode(void * data) {
 	enum AVMediaType codec_type = ctx->codec_type;
 
 	int stop = FALSE;
-	JNIEnv * env;
+	JNIEnv *env;
 	char thread_title[256];
 	sprintf(thread_title, "FFmpegDecode[%d]", decoder_data->stream_type);
 
