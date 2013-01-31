@@ -1133,14 +1133,15 @@ static void player_free_audio_track(Player *player, State *state) {
 }
 
 static int player_create_audio_track(Player *player, State *state) {
+	JNIEnv *env = state->env;
 	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
 	int sample_rate = ctx->sample_rate;
 	int channels = ctx->channels;
 
-	jobject audio_track = (*state->env)->CallObjectMethod(state->env,
+	jobject audio_track = (*env)->CallObjectMethod(env,
 		state->thiz, player->player_prepareAudioTrack, sample_rate, channels);
 
-	jthrowable exc = (*state->env)->ExceptionOccurred(state->env);
+	jthrowable exc = (*env)->ExceptionOccurred(env);
 	if (exc) {
 		return -ERROR_NOT_CREATED_AUDIO_TRACK;
 	}
@@ -1148,15 +1149,15 @@ static int player_create_audio_track(Player *player, State *state) {
 		return -ERROR_NOT_CREATED_AUDIO_TRACK;
 	}
 
-	player->audio_track = (*state->env)->NewGlobalRef(state->env, audio_track);
-	(*state->env)->DeleteLocalRef(state->env, audio_track);
+	player->audio_track = (*env)->NewGlobalRef(env, audio_track);
+	(*env)->DeleteLocalRef(env, audio_track);
 	if (player->audio_track == NULL) {
 		return -ERROR_NOT_CREATED_AUDIO_TRACK_GLOBAL_REFERENCE;
 	}
 
-	player->audio_track_channel_count = (*state->env)->CallIntMethod(state->env,
+	player->audio_track_channel_count = (*env)->CallIntMethod(env,
 		player->audio_track, player->audio_track_getChannelCount);
-	int audio_track_sample_rate = (*state->env)->CallIntMethod(state->env,
+	int audio_track_sample_rate = (*env)->CallIntMethod(env,
 		player->audio_track, player->audio_track_getSampleRate);
 	player->audio_track_format = AV_SAMPLE_FMT_S16;
 
