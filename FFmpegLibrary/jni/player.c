@@ -801,6 +801,11 @@ exit_loop:
 		LOGI(3, "player_read_stream stop");
 		av_free_packet(pkt);
 
+		// flush audio buffer
+		if (player->audio_track) {
+			(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
+		}
+
 		//request stream to stop
 		player_assign_to_no_boolean_array(player, player->stop_streams, TRUE);
 		pthread_cond_broadcast(&player->cond_queue);
