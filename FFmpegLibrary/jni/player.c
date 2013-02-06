@@ -88,7 +88,6 @@ typedef struct Player {
 	pthread_mutex_t mutex_operation;
 
 	AVFormatContext *format_ctx;
-	int input_inited;
 	int64_t open_time;
 
 	int video_index;
@@ -1297,10 +1296,9 @@ static int player_free_decoding_threads(Player *player) {
 }
 
 static void player_free_input(Player *player) {
-	if (player->input_inited) {
+	if (player->format_ctx) {
 		LOGI(7, "player_set_data_source close_file");
 		avformat_close_input(&player->format_ctx);
-		player->input_inited = FALSE;
 	}
 }
 
@@ -1333,7 +1331,6 @@ static int player_open_input(Player *player, const char *file_path, AVDictionary
 	}
 	player->format_ctx = ic;
 	player->open_time = 0;
-	player->input_inited = TRUE;
 	update_external_clock_pts(player, av_gettime()/(double)AV_NOPTS_VALUE);
 	update_external_clock_speed(player, 1.0);
 	player->video_current_pts_drift = -av_gettime() / 1000000.0;
