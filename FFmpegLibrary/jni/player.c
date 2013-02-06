@@ -160,7 +160,7 @@ typedef struct State {
 
 typedef struct DecoderState {
 	int stream_index;
-	enum AVMediaType stream_type;
+	enum AVMediaType media_type;
 	struct Player *player;
 	JNIEnv* env;
 	jobject thiz;
@@ -168,7 +168,7 @@ typedef struct DecoderState {
 
 typedef struct DecoderData {
 	struct Player *player;
-	enum AVMediaType stream_type;
+	enum AVMediaType media_type;
 } DecoderData;
 
 typedef struct VideoRGBFrameElem {
@@ -289,11 +289,11 @@ end:
 static QueueCheckFuncRet player_decode_queue_check(Queue *queue, DecoderData *decoderData, int *ret) {
 	Player *player = decoderData->player;
 
-	if (player->stop_streams[decoderData->stream_type]) {
+	if (player->stop_streams[decoderData->media_type]) {
 		*ret = DECODE_CHECK_MSG_STOP;
 		return QUEUE_CHECK_FUNC_RET_SKIP;
 	}
-	if (player->flush_streams[decoderData->stream_type]) {
+	if (player->flush_streams[decoderData->media_type]) {
 		*ret = DECODE_CHECK_MSG_FLUSH;
 		return QUEUE_CHECK_FUNC_RET_SKIP;
 	}
@@ -486,14 +486,14 @@ static void *player_decode(void * data) {
 	int err = ERROR_NO_ERROR;
 	DecoderData *decoder_data = data;
 	Player *player = decoder_data->player;
-	Queue *queue = player->packets_queue[decoder_data->stream_type];
-	AVCodecContext *ctx = player->input_codec_ctxs[decoder_data->stream_type];
+	Queue *queue = player->packets_queue[decoder_data->media_type];
+	AVCodecContext *ctx = player->input_codec_ctxs[decoder_data->media_type];
 	enum AVMediaType codec_type = ctx->codec_type;
 
 	int stop = FALSE;
 	JNIEnv *env;
 	char thread_title[256];
-	sprintf(thread_title, "FFmpegDecode[%d]", decoder_data->stream_type);
+	sprintf(thread_title, "FFmpegDecode[%d]", decoder_data->media_type);
 
 	JavaVMAttachArgs thread_spec = { JNI_VERSION_1_4, thread_title, NULL };
 
@@ -509,7 +509,7 @@ static void *player_decode(void * data) {
 		PacketData *packet_data;
 		int has_sleep;
 
-		LOGI(10, "player_decode[%d] waiting for frame", decoder_data->stream_type);
+		LOGI(10, "player_decode[%d] waiting for frame", decoder_data->media_type);
 		pthread_mutex_lock(&player->mutex_queue);
 pop:
 		has_sleep = 0;
@@ -517,22 +517,22 @@ pop:
 		while (player->pause && !player->stop) {
 			// we try to sleep 10ms
 			if (!has_sleep) {
-				LOGI(3, "player_decode[%d] enter sleep...", decoder_data->stream_type);
+				LOGI(3, "player_decode[%d] enter sleep...", decoder_data->media_type);
 				has_sleep = 1;
 			}
 			player_decode_queue_check(queue, decoder_data, &interrupt_ret);
 			// MUST wake up from PAUSE --> SEEK/STOP
 			if (interrupt_ret == DECODE_CHECK_MSG_FLUSH) {
-				LOGI(2, "player_decode[%d] interrupted by FLUSH from PAUSE", decoder_data->stream_type);
+				LOGI(2, "player_decode[%d] interrupted by FLUSH from PAUSE", decoder_data->media_type);
 				goto flush;
 			} else if (interrupt_ret == DECODE_CHECK_MSG_STOP) {
-				LOGI(2, "player_decode[%d] interrupted by STOP from PAUSE", decoder_data->stream_type);
+				LOGI(2, "player_decode[%d] interrupted by STOP from PAUSE", decoder_data->media_type);
 				goto stop;
 			}
 			pthread_cond_timeout_np(&player->cond_queue, &player->mutex_queue, 10);
 		}
 		if (has_sleep)
-			LOGI(3, "player_decode[%d] wake up...", decoder_data->stream_type);
+			LOGI(3, "player_decode[%d] wake up...", decoder_data->media_type);
 
 		packet_data = queue_pop_start_impl(&queue,
 			&player->mutex_queue, &player->cond_queue,
@@ -540,19 +540,19 @@ pop:
 			(void **) &interrupt_ret);
 		if (packet_data == NULL) {
 			if (interrupt_ret == DECODE_CHECK_MSG_FLUSH) {
-				LOGI(3, "player_decode[%d] interrupted by FLUSH", decoder_data->stream_type);
+				LOGI(3, "player_decode[%d] interrupted by FLUSH", decoder_data->media_type);
 				goto flush;
 			} else if (interrupt_ret == DECODE_CHECK_MSG_STOP) {
-				LOGI(3, "player_decode[%d] interrupted by STOP", decoder_data->stream_type);
+				LOGI(3, "player_decode[%d] interrupted by STOP", decoder_data->media_type);
 				goto stop;
 			} else {
 				assert(FALSE);
 			}
 		}
 		pthread_mutex_unlock(&player->mutex_queue);
-		LOGI(10, "player_decode[%d] decoding frame", decoder_data->stream_type);
+		LOGI(10, "player_decode[%d] decoding frame", decoder_data->media_type);
 		if (packet_data->end_of_stream) {
-			LOGI(10, "player_decode[%d] read end of stream", decoder_data->stream_type);
+			LOGI(10, "player_decode[%d] read end of stream", decoder_data->media_type);
 		}
 
 		if (codec_type == AVMEDIA_TYPE_AUDIO) {
@@ -571,10 +571,10 @@ pop:
 		}
 		continue;
 stop:
-		LOGI(2, "player_decode[%d] stop", decoder_data->stream_type);
+		LOGI(2, "player_decode[%d] stop", decoder_data->media_type);
 		stop = TRUE;
 flush:
-		LOGI(2, "player_decode[%d] flush", decoder_data->stream_type);
+		LOGI(2, "player_decode[%d] flush", decoder_data->media_type);
 		PacketData *to_free; // FIXME move to PacketData
 		while ((to_free = queue_pop_start_impl_non_block(queue))
 				!= NULL) {
@@ -583,12 +583,12 @@ flush:
 			}
 			queue_pop_finish_impl(queue, &player->mutex_queue, &player->cond_queue);
 		}
-		LOGI(2, "player_decode[%d] flushing", decoder_data->stream_type);
+		LOGI(2, "player_decode[%d] flushing", decoder_data->media_type);
 
 		if (codec_type == AVMEDIA_TYPE_AUDIO) {
 			(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_flush);
 			if (stop) {
-				LOGI(1,"player_decoder[%d], try to stop and release audio_track", decoder_data->stream_type);
+				LOGI(1,"player_decoder[%d], try to stop and release audio_track", decoder_data->media_type);
 				(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_stop);
 				(*env)->CallVoidMethod(env, player->audio_track, player->audio_track_release);
 			}
@@ -610,17 +610,17 @@ flush:
 					pthread_cond_wait(&player->cond_queue, &player->mutex_queue);
 			}
 		}
-		LOGI(2, "player_decode[%d] flushed", decoder_data->stream_type);
+		LOGI(2, "player_decode[%d] flushed", decoder_data->media_type);
 
 		if (stop) {
-			LOGI(2, "player_decode[%d] signal stop", decoder_data->stream_type);
-			player->stop_streams[decoder_data->stream_type] = FALSE;
+			LOGI(2, "player_decode[%d] signal stop", decoder_data->media_type);
+			player->stop_streams[decoder_data->media_type] = FALSE;
 			pthread_cond_broadcast(&player->cond_queue);
 			pthread_mutex_unlock(&player->mutex_queue);
 			goto detach_current_thread;
 		} else {
-			LOGI(2, "player_decode[%d] signal flush", decoder_data->stream_type);
-			player->flush_streams[decoder_data->stream_type] = FALSE;
+			LOGI(2, "player_decode[%d] signal flush", decoder_data->media_type);
+			player->flush_streams[decoder_data->media_type] = FALSE;
 			pthread_cond_broadcast(&player->cond_queue);
 			goto pop;
 		}
