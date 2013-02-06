@@ -22,17 +22,13 @@
 #include <pthread.h>
 
 #include <android/log.h>
+#include <jni.h>
 
+#include "helpers.h"
 #include "queue.h"
 
 #define LOG_LEVEL 1
 #define LOG_TAG "AVEngine:queue.c"
-#define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
-#define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
-#define LOGW(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__);}
-
-#define FALSE 0
-#define TRUE (!(FALSE))
 
 struct _Queue {
 	int next_to_write;

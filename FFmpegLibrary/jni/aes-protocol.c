@@ -27,16 +27,12 @@
 #include <tropicssl/sha2.h>
 #include <tropicssl/aes.h>
 
+#include "helpers.h"
 #include "aes-protocol.h"
-
-#define FALSE (0)
-#define TRUE (!FALSE)
 
 #include <android/log.h>
 #define LOG_LEVEL 2
-#define LOG_TAG "aes-protocol.c"
-#define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
-#define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
+#define LOG_TAG "AVEngine::aes-protocol.c"
 
 #define RAW_KEY_SIZE	    24
 #define BASE64_KEY_SIZE	    ((4 * RAW_KEY_SIZE) / 3)

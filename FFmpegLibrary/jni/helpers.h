@@ -19,6 +19,17 @@
 #ifndef HELPERS_H_
 #define HELPERS_H_
 
+#define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
+#define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
+#define LOGW(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__);}
+
+#ifndef NELEM
+#define NELEM(x) ((int)(sizeof(x) / sizeof((x)[0])))
+#endif
+
+#define FALSE 0
+#define TRUE  1
+
 typedef struct {
     const char* name;
     const char* signature;

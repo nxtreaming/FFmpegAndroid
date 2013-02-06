@@ -22,12 +22,11 @@
 
 #include <stdlib.h>
 
+#include "helpers.h"
 #include "nativetester.h"
 
-#define LOG_TAG "NativeTester"
+#define LOG_TAG "AVEngine:nativetester.c"
 #define LOG_LEVEL 10
-#define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
-#define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
 
 jboolean jni_nativetester_is_neon(JNIEnv *env, jobject thiz) {
 #ifdef FEATURE_NEON

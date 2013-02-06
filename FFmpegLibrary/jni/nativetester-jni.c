@@ -22,16 +22,11 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include "helpers.h"
 #include "nativetester.h"
 
-#ifndef NELEM
-#define NELEM(x) ((int)(sizeof(x) / sizeof((x)[0])))
-#endif
-
-#define LOG_TAG "NativeTester-jni"
+#define LOG_TAG "AVEngine:nativetester-jni.c"
 #define LOG_LEVEL 10
-#define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
-#define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
 
 static int register_native_methods(JNIEnv* env,
 		const char* class_name,

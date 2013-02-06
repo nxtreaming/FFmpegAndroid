@@ -31,15 +31,8 @@
 #include "helpers.h"
 #include "player.h"
 
-/*for android logs*/
-#define LOG_TAG "FFmpegTest"
+#define LOG_TAG "AVEngine:ffmpeg-jni.c"
 #define LOG_LEVEL 10
-#define LOGI(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);}
-#define LOGE(level, ...) if (level <= LOG_LEVEL) {__android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);}
-
-#ifndef NELEM
-#define NELEM(x) ((int)(sizeof(x) / sizeof((x)[0])))
-#endif
 
 static JNINativeMethod player_methods[] = {
 	{"initNative", "()I", (void*) jni_player_init},
