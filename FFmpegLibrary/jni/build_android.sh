@@ -16,12 +16,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if [ "$NDK" = "" ]; then
-	echo NDK variable not set, exiting
-	echo "Use: export NDK=/your/path/to/android-ndk"
-	exit 1
-fi
-
 OS=`uname -s | tr '[A-Z]' '[a-z]'`
 
 #CFLAGS="-I$ARM_INC -fpic -DANDROID -fpic -mthumb-interwork -ffunction-sections -funwind-tables -fstack-protector -fno-short-enums -D__ARM_ARCH_5__ -D__ARM_ARCH_5T__ -D__ARM_ARCH_5E__ -D__ARM_ARCH_5TE__  -Wno-psabi -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer -fno-strict-aliasing -finline-limit=64 -DANDROID  -Wa,--noexecstack -MMD -MP"
@@ -234,7 +228,7 @@ function build_ffmpeg()
 	    --cross-prefix=$CROSS_PREFIX \
 	    --prefix=$(pwd)/$PREFIX \
 	    --arch=armv7-a \
-	    --extra-cflags="-O3 -fpic -DANDROID -DHAVE_SYS_UIO_H=1 -Dipv6mr_interface=ipv6mr_ifindex -fasm -Wno-psabi -fno-short-enums -fno-strict-aliasing -finline-limit=300 $CFLAGS -I${PREFIX}/include" \
+	    --extra-cflags="-fpic -DANDROID -DHAVE_SYS_UIO_H=1 -Dipv6mr_interface=ipv6mr_ifindex -fasm -Wno-psabi -fno-short-enums -fno-strict-aliasing -finline-limit=300 $CFLAGS -I${PREFIX}/include" \
 	    --extra-ldflags="-Wl,-rpath-link=${SYSROOT}/usr/lib -L${SYSROOT}/usr/lib -nostdlib -L${PREFIX}/lib" \
 	    --extra-libs="-llog -lc -lm -ldl -lgcc -lz" \
 	    --disable-shared \
@@ -300,6 +294,10 @@ function build_one()
 
 	echo "Building one..."
 	cd ffmpeg
+
+	${CROSS_PREFIX}ar d libavcodec/libavcodec.a log2_tab.o
+	${CROSS_PREFIX}ar d libavformat/libavformat.a log2_tab.o
+	${CROSS_PREFIX}ar d libswresample/libswresample.a log2_tab.o
 
 	${CROSS_PREFIX}ld -rpath-link=${SYSROOT}/usr/lib -L${SYSROOT}/usr/lib -L${PREFIX}/lib -soname $SONAME -shared -nostdlib -z noexecstack -Bsymbolic --whole-archive --no-undefined -o ${PREFIX}/${SONAME} -lavformat -lavcodec -lswresample -lswscale -lavutil -lx264 -lfdk-aac -lc -lm -lz -ldl -llog --dynamic-linker=/system/bin/linker -zmuldefs ${NDK}/toolchains/arm-linux-androideabi-4.6/prebuilt/${OS}-x86/lib/gcc/arm-linux-androideabi/4.6/libgcc.a || exit 1
 
