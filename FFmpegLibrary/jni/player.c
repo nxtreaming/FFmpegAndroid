@@ -23,6 +23,7 @@
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/time.h>
 
 #include <libavutil/avstring.h>
 #include <libavutil/pixdesc.h>
@@ -62,6 +63,10 @@
 #define LOG_TAG "AVEngine:player.c"
 
 #define DO_NOT_SEEK (0xdeadbeef)
+
+#ifndef AVCODEC_MAX_AUDIO_FRAME_SIZE
+#	define AVCODEC_MAX_AUDIO_FRAME_SIZE 96000 // 0.5 second of 48khz 32bit audio
+#endif
 
 #define MIN_SLEEP_TIME_MS 2
 #define MIN_SLEEP_TIME_US 10000
