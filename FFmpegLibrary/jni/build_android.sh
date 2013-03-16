@@ -295,10 +295,6 @@ function build_one()
 	echo "Building one..."
 	cd ffmpeg
 
-	${CROSS_PREFIX}ar d libavcodec/libavcodec.a log2_tab.o
-	${CROSS_PREFIX}ar d libavformat/libavformat.a log2_tab.o
-	${CROSS_PREFIX}ar d libswresample/libswresample.a log2_tab.o
-
 	${CROSS_PREFIX}ld -rpath-link=${SYSROOT}/usr/lib -L${SYSROOT}/usr/lib -L${PREFIX}/lib -soname $SONAME -shared -nostdlib -z noexecstack -Bsymbolic --whole-archive --no-undefined -o ${PREFIX}/${SONAME} -lavformat -lavcodec -lswresample -lswscale -lavutil -lx264 -lfdk-aac -lc -lm -lz -ldl -llog --dynamic-linker=/system/bin/linker -zmuldefs ${NDK}/toolchains/arm-linux-androideabi-4.6/prebuilt/${OS}-x86/lib/gcc/arm-linux-androideabi/4.6/libgcc.a || exit 1
 
 	cd ..
