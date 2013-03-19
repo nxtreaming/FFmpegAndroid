@@ -24,65 +24,61 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.View;
 
-
-public class FFmpegView extends View implements FFmpegDisplay {
-
-	// private static final String TAG = FFmpegView.class.getCanonicalName();
-	private FFmpegPlayer mpegPlayer = null;
-	private FpsCounter fpsCounter;
+public class FFmpegView extends View implements FFmpegDisplay  {
+	private FFmpegPlayer mMpegPlayer = null;
+	private Object mMpegPlayerLock = new Object();
+	private TutorialThread mThread = null;
 	private Paint mPaint;
 
-	public FFmpegView(Context context) {
-		super(context);
-		this.init();
-	}
+	RenderedFrame renderFrame;
 
-	private void init() {
-		this.mPaint = new Paint();
-		this.mPaint.setTextSize(32);
-		this.mPaint.setColor(Color.RED);
-		this.fpsCounter = new FpsCounter(10);
+	public FFmpegView(Context context) {
+		this(context, null, 0);
 	}
 
 	public FFmpegView(Context context, AttributeSet attrs) {
-		super(context, attrs);
-		this.init();
+		this(context, attrs, 0);
 	}
 
 	public FFmpegView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
-		this.init();
+		mPaint = new Paint();
+		mPaint.setTextSize(32);
+		mPaint.setColor(Color.RED);
+	}
+
+	public void init(){
+		if (mMpegPlayer != null)
+			mMpegPlayer= null;
 	}
 
 	@Override
-	public void setMpegPlayer(FFmpegPlayer mpegPlayer) {
-		this.mpegPlayer = mpegPlayer;
-		this.invalidate();
-	}
-	
-	@Override
-	protected void onAttachedToWindow() {
-		super.onAttachedToWindow();
+	public void setMpegPlayer(FFmpegPlayer fFmpegPlayer) {
+		if (mMpegPlayer != null)
+			throw new RuntimeException("setMpegPlayer could not be called twice");
 		
-		this.mpegPlayer.renderFrameStart();
-	}
-	
-	@Override
-	protected void onDetachedFromWindow() {
-		super.onDetachedFromWindow();
-		
-		this.mpegPlayer.renderFrameStop();
+		synchronized (mMpegPlayerLock) {
+			this.mMpegPlayer = fFmpegPlayer;
+			mMpegPlayerLock.notifyAll();
+			this.mMpegPlayer.renderFrameStart();
+			mThread = new TutorialThread();
+			mThread.setRunning(true);
+			mThread.setStop(false);
+			mThread.start();
+		}
 	}
 
 	@Override
 	protected void onDraw(Canvas canvas) {
-		canvas.drawRGB(0, 0, 0);
-
-		RenderedFrame renderFrame;
+		// TODO Auto-generated method stub
+		super.onDraw(canvas);
+		if(renderFrame == null)
+			return;
 		try {
-			renderFrame = this.mpegPlayer.renderFrame();
+			canvas.drawColor(Color.BLACK);
 			canvas.save();
 			int width = this.getWidth();
 			int height = this.getHeight();
@@ -94,17 +90,94 @@ public class FFmpegView extends View implements FFmpegDisplay {
 			canvas.translate(-moveX, -moveY);
 			canvas.scale(ratio, ratio);
 
-			canvas.drawBitmap(renderFrame.bitmap, 0, 0, null);
-			this.mpegPlayer.releaseFrame();
+			canvas.drawBitmap(renderFrame.bitmap, 0, 0, mPaint);
 			canvas.restore();
-		} catch (InterruptedException e) {
+		} catch(Exception e) {
+			e.printStackTrace();
+		}finally {
+			mMpegPlayer.releaseFrame();
 		}
-	
-
-		String fps = this.fpsCounter.tick();
-		canvas.drawText(fps, 40, 40, this.mPaint);
-		// force a redraw, with a different time-based pattern.
-		this.invalidate();
 	}
 
+	@Override
+	protected void onAttachedToWindow() {
+		super.onAttachedToWindow();
+//		this.mpegPlayer.renderFrameStart();
+	}
+
+	@Override
+	protected void onDetachedFromWindow() {
+		super.onDetachedFromWindow();
+//		if (mThread != null) {
+//			this.mMpegPlayer.renderFrameStop();
+//			mThread.setRunning(false);
+//			mThread.interrupt();
+//		}
+	}
+
+	class TutorialThread extends Thread {
+		private volatile boolean mRun = false;
+		private volatile boolean mStop = false;
+
+		public TutorialThread() {
+		}
+
+		public synchronized void setRunning(boolean run) {
+			mRun = run;
+		}
+
+		public synchronized void setStop(boolean stop) {
+			mStop = stop;
+		}
+
+		public synchronized boolean isRunning() {
+			return (mRun && !mStop);
+		}
+
+		@Override
+		public void run() {
+			while (isRunning()) {
+				try {
+					synchronized (mMpegPlayerLock) {
+						while (mMpegPlayerLock == null)
+							mMpegPlayerLock.wait();
+						if (isRunning()) {
+							renderFrame(mMpegPlayer);
+							Log.d("renderFrame", "renderFrame+++++++");
+						}
+					}
+				} catch (InterruptedException e) {
+				}
+			}
+		}
+
+		private void renderFrame(FFmpegPlayer mpegPlayer) throws InterruptedException {
+			 renderFrame = mpegPlayer.renderFrame();
+
+			//if render is interrupted by user, it will return |null|, we just ignore it
+			if (renderFrame == null) {
+				setStop(true);
+				return; //throw new RuntimeException();
+			}
+			if (renderFrame.bitmap == null) {
+				setStop(true);
+				return;//throw new RuntimeException();
+			}
+			try {
+			     postInvalidate();
+			} finally {
+			}
+		}
+	}
+
+	@Override
+	public void destroy() {
+		// TODO Auto-generated method stub
+		if (mThread != null) {
+			this.mMpegPlayer.renderFrameStop();
+			mThread.setRunning(false);
+			mThread.interrupt();
+			renderFrame = null;
+		}
+	}
 }

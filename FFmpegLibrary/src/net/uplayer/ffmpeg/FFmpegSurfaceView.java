@@ -205,4 +205,9 @@ public class FFmpegSurfaceView extends SurfaceView implements FFmpegDisplay,
 		}
 	}
 
+	@Override
+	public void destroy() {
+		// TODO Auto-generated method stub
+	}
+
 }

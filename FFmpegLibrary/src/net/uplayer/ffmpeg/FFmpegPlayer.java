@@ -212,6 +212,7 @@ public class FFmpegPlayer {
 	private int mVideoDurationS;
 	private FFmpegStreamInfo[] mStreamsInfos = null;
 	private boolean mIsFinished = false;
+	private FFmpegDisplay videoView;
 
 	static class RenderedFrame {
 		public Bitmap bitmap;
@@ -226,13 +227,15 @@ public class FFmpegPlayer {
 			throw new RuntimeException(String.format(
 					"Could not initialize player: %d", error));
 		videoView.setMpegPlayer(this);
+		this.videoView = videoView;
 	}
-
-	@Override
-	protected void finalize() throws Throwable {
-		super.finalize();
+//	@Override
+//	protected void finalize() throws Throwable {
+//		deallocNative();
+//		super.finalize();
+//	}
+	public void dealoc(){
 	}
-
 	public void dealloc(){
 		deallocNative();
 	}
@@ -385,5 +388,9 @@ public class FFmpegPlayer {
 
 	public void setMpegListener(FFmpegListener mpegListener) {
 		this.mpegListener = mpegListener;
+	}
+	public void destroy(){
+		if(videoView != null)
+			videoView.destroy();
 	}
 }

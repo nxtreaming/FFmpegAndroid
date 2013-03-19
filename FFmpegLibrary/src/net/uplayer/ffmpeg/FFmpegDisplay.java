@@ -21,5 +21,5 @@ package net.uplayer.ffmpeg;
 public interface FFmpegDisplay {
 
 	void setMpegPlayer(FFmpegPlayer fFmpegPlayer);
-
+	void destroy();
 }
