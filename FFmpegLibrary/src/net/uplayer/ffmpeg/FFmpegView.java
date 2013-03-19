@@ -143,7 +143,6 @@ public class FFmpegView extends View implements FFmpegDisplay  {
 							mMpegPlayerLock.wait();
 						if (isRunning()) {
 							renderFrame(mMpegPlayer);
-							Log.d("renderFrame", "renderFrame+++++++");
 						}
 					}
 				} catch (InterruptedException e) {
