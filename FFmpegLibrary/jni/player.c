@@ -116,6 +116,7 @@ typedef struct Player {
 	int last_updated_time;
 
 	int playing;
+	int streaming_type;
 
 	pthread_mutex_t mutex_queue;
 	pthread_cond_t cond_queue;
@@ -1485,6 +1486,11 @@ static int player_set_data_source(State *state, const char *file_path,
 	}
 
 	ic = player->format_ctx;
+
+	//TODO: check more AVIO_SEEKABLE_XXX
+	if (ic->pb)
+		player->streaming_type = !!(ic->pb->seekable & AVIO_SEEKABLE_NORMAL);
+
 	for (i=0; i<ic->nb_streams; i++) {
 		ic->streams[i]->discard = AVDISCARD_ALL;
 	}
@@ -1895,6 +1901,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 	player->pause = FALSE;
 	player->stop = FALSE;
 	player->flush_video_play = FALSE;
+	player->streaming_type = FALSE;
 
 	av_log_set_level(AV_LOG_WARNING);
 	avformat_network_init();
@@ -2097,4 +2104,10 @@ void jni_player_stop(JNIEnv *env, jobject thiz) {
 int jni_player_get_video_duration(JNIEnv *env, jobject thiz) {
 	Player *player = player_get_player_field(env, thiz);
 	return player->video_duration;
+}
+
+//1: seekable, 0:streaming
+int jni_player_get_streaming_type(JNIEnv *env, jobject thiz) {
+	Player *player = player_get_player_field(env, thiz);
+	return player->streaming_type;
 }

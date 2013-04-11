@@ -119,5 +119,6 @@ void jni_player_render_frame_stop(JNIEnv *env, jobject thiz);
 jobject jni_player_render_frame(JNIEnv *env, jobject thiz);
 void jni_player_release_frame (JNIEnv *env, jobject thiz);
 int jni_player_get_video_duration(JNIEnv *env, jobject thiz);
+int jni_player_get_streaming_type(JNIEnv *env, jobject thiz);
 
 #endif

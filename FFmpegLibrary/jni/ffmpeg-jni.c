@@ -47,6 +47,7 @@ static JNINativeMethod player_methods[] = {
 	{"renderFrameNative", "()Landroid/graphics/Bitmap;", (void*) jni_player_render_frame},
 	{"releaseFrame", "()V", (void*) jni_player_release_frame},
 	{"getVideoDurationNative", "()I", (void*) jni_player_get_video_duration},
+	{"getStreamingTypeNative", "()I", (void*) jni_player_get_streaming_type},
 };
 
 static int register_native_methods(JNIEnv* env,

@@ -261,6 +261,7 @@ public class FFmpegPlayer {
 	private native void seekNative(int position) throws NotPlayingException;
 
 	private native int getVideoDurationNative();
+	private native int getStreamingTypeNative();
 
 	/**
 	 * 
