@@ -572,8 +572,14 @@ pop:
 		}
 		queue_pop_finish(queue, &player->mutex_queue, &player->cond_queue);
 		if (err < 0) {
-			pthread_mutex_lock(&player->mutex_queue);
-			goto stop;
+			if (err == (-ERROR_WHILE_DECODING_VIDEO      ) ||
+			    err == (-ERROR_WHILE_DECODING_AUDIO_FRAME) ) {
+				// we try to ignore the decoder error
+				continue;
+			} else {
+				pthread_mutex_lock(&player->mutex_queue);
+				goto stop;
+			}
 		}
 		continue;
 stop:
@@ -705,6 +711,11 @@ static void * player_read_stream(void *data) {
 		}
 		int ret = av_read_frame(player->format_ctx, pkt);
 		if (ret < 0) {
+			// Seek to the first FLV packet could cause EAGAIN
+			if (ret == AVERROR(EAGAIN)) {
+				LOGI(2, "player_read_stream stream av_read_frame() returns EGAIN");
+				continue;
+			}
 			pthread_mutex_lock(&player->mutex_queue);
 			LOGI(3, "player_read_stream stream end");
 			queue = player->packets_queue[AVMEDIA_TYPE_VIDEO];
