@@ -736,6 +736,7 @@ static void * player_read_stream(void *data) {
 					assert(FALSE);
 				}
 			}
+			//TODO: fix EOF and CODEC_CAP_DELAY, ouput the cached decoder's data?
 			packet_data->end_of_stream = TRUE;
 			LOGI(3, "player_read_stream sending end_of_stream packet");
 			queue_push_finish_impl(queue, &player->mutex_queue, &player->cond_queue, to_write);
