@@ -191,6 +191,9 @@ typedef struct PacketData {
 	AVPacket *packet;
 } PacketData;
 
+static void player_update_current_time(State *state, int is_finished);
+static void player_update_time(State *state, double time);
+
 static void throw_exception(JNIEnv *env, const char * exception_class_path,
 		const char *msg) {
 	jclass newExcCls = (*env)->FindClass(env, exception_class_path);
@@ -324,7 +327,7 @@ static int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketD
 			return 0;
 		}
 		// avoid calling more frequently
-		if (player->audio_clock > (player->last_audio_clock + 0.5)
+		if (player->audio_clock > (player->last_audio_clock + 0.5))
 			player_update_time(&state, player->audio_clock);
 		player->last_audio_clock = player->audio_clock;
 	}
