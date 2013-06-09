@@ -142,6 +142,7 @@ typedef struct Player {
 	int decode_threads_created[AVMEDIA_TYPE_NB];
 
 	double audio_clock;
+	double last_audio_clock;
 	int64_t audio_write_time;
 
 	int64_t audio_pause_time;
@@ -322,7 +323,10 @@ static int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketD
 			player_update_current_time(&state, TRUE);
 			return 0;
 		}
-		player_update_time(&state, player->audio_clock);
+		// avoid calling more frequently
+		if (player->audio_clock > (player->last_audio_clock + 0.5)
+			player_update_time(&state, player->audio_clock);
+		player->last_audio_clock = player->audio_clock;
 	}
 
 	LOGI(10, "player_decode_audio decoding");
@@ -905,6 +909,7 @@ seek_loop:
 		}
 
 		player->seek_position = DO_NOT_SEEK;
+		player->last_audio_clock = 0;
 		update_external_clock_pts(player, seek_target / (double)AV_TIME_BASE);
 		pthread_cond_broadcast(&player->cond_queue);
 		LOGI(3, "player_read_stream ending seek");
@@ -1813,6 +1818,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 	player->video_index = -1;
 	player->rendering = FALSE;
 	player->thiz = thiz;
+	player->last_audio_clock = 0;
 
 	int err = ERROR_NO_ERROR;
 
