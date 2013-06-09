@@ -719,6 +719,15 @@ static void * player_read_stream(void *data) {
 			pthread_mutex_lock(&player->mutex_queue);
 			LOGI(3, "player_read_stream stream end");
 			queue = player->packets_queue[AVMEDIA_TYPE_VIDEO];
+			LOGI(3, "player_read_stream use video queue");
+			if (!queue) {
+				queue = player->packets_queue[AVMEDIA_TYPE_AUDIO];
+				LOGI(3, "player_read_stream use audio queue");
+			}
+			if (!queue) {
+				LOGI(3, "player_read_stream: fail to find available packet_queue");
+				goto exit_loop;
+			}
 			packet_data = queue_push_start_impl(queue,
 				&player->mutex_queue, &player->cond_queue, &to_write,
 				(QueueCheckFunc) player_read_stream_check, player,
