@@ -327,9 +327,10 @@ static int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketD
 			return 0;
 		}
 		// avoid calling more frequently
-		if (player->audio_clock > (player->last_audio_clock + 0.5))
+		if (player->audio_clock > (player->last_audio_clock + 0.5)) {
 			player_update_time(&state, player->audio_clock);
-		player->last_audio_clock = player->audio_clock;
+			player->last_audio_clock = player->audio_clock;
+		}
 	}
 
 	LOGI(10, "player_decode_audio decoding");
