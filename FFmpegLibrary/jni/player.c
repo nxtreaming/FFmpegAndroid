@@ -74,6 +74,7 @@
 
 typedef struct Player {
 	JavaVM *get_javavm;
+	jobject thiz;
 
 	jclass player_class;
 	jclass audio_track_class;
@@ -311,6 +312,18 @@ static int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketD
 	Player *player = decoder_data->player;
 	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
 	AVFrame *frame = player->input_frames[AVMEDIA_TYPE_AUDIO];
+
+	if (player->video_index < 0) {
+		State state = { player, env, player->thiz };
+
+		// notify the outer_app the progress indicator in audio-only mode.
+		if (packet_data->end_of_stream) {
+			LOGI(2, "player_decode_audio end of stream");
+			player_update_current_time(&state, TRUE);
+			return 0;
+		}
+		player_update_time(&state, player->audio_clock);
+	}
 
 	LOGI(10, "player_decode_audio decoding");
 	AVPacket *packet = packet_data->packet;
@@ -1799,6 +1812,7 @@ int jni_player_init(JNIEnv *env, jobject thiz) {
 	player->audio_index = -1;
 	player->video_index = -1;
 	player->rendering = FALSE;
+	player->thiz = thiz;
 
 	int err = ERROR_NO_ERROR;
 
@@ -1972,6 +1986,7 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 	int interrupt_ret;
 	VideoRGBFrameElem *elem;
 
+#if 0
 	if (!player->input_codec_ctxs[AVMEDIA_TYPE_VIDEO]) {
 		player_update_time(&state, player->audio_clock);
 		usleep(MIN_SLEEP_TIME_US*5);
@@ -1979,6 +1994,8 @@ jobject jni_player_render_frame(JNIEnv *env, jobject thiz) {
 		throw_interrupted_exception(env, "Render frame was simulated by user");
 		return NULL;
 	}
+#endif
+
 	if (!player->rendering) {
 		LOGI(1, "jni_player_render_frame should be skipped...");
 		// do not throw exception frequently
