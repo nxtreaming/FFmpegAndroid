@@ -1543,12 +1543,21 @@ static int player_set_data_source(State *state, const char *file_path,
 		player->stream_indexs[AVMEDIA_TYPE_AUDIO], -1, NULL, 0);
 
 	if (st_index[AVMEDIA_TYPE_AUDIO] >= 0) {
-		err = stream_component_open(player, st_index[AVMEDIA_TYPE_AUDIO]);
-		if (err < 0)
-			goto error;
-		err = player_create_audio_track(player, state);
-		if (err < 0)
-			goto error;
+        AVCodecContext *avctx = ic->streams[st_index[AVMEDIA_TYPE_AUDIO]]->codec;
+        if (avctx->sample_rate > 0 && avctx->channels > 0) {
+	        LOGI(3, "player_set_data_source open audio");
+		    err = stream_component_open(player, st_index[AVMEDIA_TYPE_AUDIO]);
+		    if (err < 0)
+			    goto error;
+
+		    err = player_create_audio_track(player, state);
+		    if (err < 0)
+			   goto error;
+        } else {
+	        LOGI(3, "player_set_data_source: audio sample rate or channels are not recognized");
+            // Note: we try to ignore the un-recognized audio stream
+            player->stream_indexs[AVMEDIA_TYPE_AUDIO] = -1;
+        }
 	}
 	if (st_index[AVMEDIA_TYPE_VIDEO] >= 0) {
 		err = stream_component_open(player, st_index[AVMEDIA_TYPE_VIDEO]);
@@ -1804,6 +1813,9 @@ void jni_player_dealloc(JNIEnv *env, jobject thiz) {
 	}
 	pthread_mutex_unlock(&player->mutex_operation);
 	LOGI(1, "jni_player_dealloc: render stopped...");
+	pthread_mutex_destroy(&player->mutex_operation);
+	pthread_mutex_destroy(&player->mutex_queue);
+	pthread_cond_destroy(&player->cond_queue);
 	free(player);
 	LOGI(1, "jni_player_dealloc: bye bye");
 }
