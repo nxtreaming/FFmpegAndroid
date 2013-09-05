@@ -311,7 +311,7 @@ static QueueCheckFuncRet player_decode_queue_check(Queue *queue, DecoderData *de
 	return QUEUE_CHECK_FUNC_RET_TEST;
 }
 
-static int player_decode_audio(DecoderData * decoder_data, JNIEnv * env, PacketData *packet_data) {
+static int player_decode_audio(DecoderData *decoder_data, JNIEnv *env, PacketData *packet_data) {
 	int got_frame_ptr = 0;
 	Player *player = decoder_data->player;
 	AVCodecContext *ctx = player->input_codec_ctxs[AVMEDIA_TYPE_AUDIO];
@@ -462,7 +462,7 @@ static int player_decode_video(DecoderData * decoder_data, JNIEnv * env, PacketD
 	pthread_mutex_unlock(&player->mutex_queue);
 	elem->time = time;
 	elem->end_of_stream = FALSE;
-	AVFrame * rgbFrame = elem->frame;
+	AVFrame *rgbFrame = elem->frame;
 	void *buffer;
 	int destWidth = ctx->width;
 	int destHeight = ctx->height;
@@ -509,7 +509,7 @@ fail_lock_bitmap:
 	return err;
 }
 
-static void *player_decode(void * data) {
+static void *player_decode(void *data) {
 	int err = ERROR_NO_ERROR;
 	DecoderData *decoder_data = data;
 	Player *player = decoder_data->player;
@@ -700,7 +700,7 @@ static int player_if_all_no_array_elements_has_value(Player *player, int *array,
 }
 
 static void * player_read_stream(void *data) {
-	Player *player = (Player *) data;
+	Player *player = (Player *)data;
 	int i, err = ERROR_NO_ERROR;
 	AVPacket packet, *pkt = &packet;
 	int64_t seek_target;
