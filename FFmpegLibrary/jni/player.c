@@ -1354,7 +1354,7 @@ static void player_free_input(Player *player) {
 /* we interrupt if |avformat_open_input()| has elapsed 7 second */
 static int decoder_interrupt_cb(void *ctx) {
 	Player *player= ctx;
-	return (player->stop) || (player->open_time && (av_gettime() - player->open_time) > 7LL*AV_TIME_BASE) ;
+	return (player->stop) || (player->open_time && (av_gettime() - player->open_time) > 7LL*AV_TIME_BASE);
 }
 
 static int player_open_input(Player *player, const char *file_path, AVDictionary *dictionary) {
